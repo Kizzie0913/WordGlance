@@ -42,29 +42,37 @@ app.post('/api/users/register', (req, res) => {
   const { userId, nickname, avatar } = req.body;
   if (!userId || !nickname) return res.status(400).json({ error: '参数不完整' });
 
+  const trimmedName = nickname.trim();
   const data = loadData();
+
+  // 检查昵称是否已被其他用户使用
+  const existingUser = data.users.find(u => u.nickname === trimmedName);
+  if (existingUser && existingUser.userId !== userId) {
+    return res.status(409).json({ error: '该昵称已被使用，请换一个独特的昵称' });
+  }
+
   let user = data.users.find(u => u.userId === userId);
 
   if (user) {
     // 老用户：更新昵称和头像
-    user.nickname = nickname.trim();
+    user.nickname = trimmedName;
     if (avatar) user.avatar = avatar;
     user.lastLogin = new Date().toISOString();
     // 同步更新所有旧留言中的昵称和头像
     data.messages.forEach(msg => {
       if (msg.userId === userId) {
-        msg.nickname = nickname.trim();
+        msg.nickname = trimmedName;
         if (avatar) msg.avatar = avatar;
       }
     });
     // 同步更新好友关系中的信息
     data.friends.forEach(f => {
       if (f.user1Id === userId) {
-        f.user1 = nickname.trim();
+        f.user1 = trimmedName;
         if (avatar) f.user1Avatar = avatar;
       }
       if (f.user2Id === userId) {
-        f.user2 = nickname.trim();
+        f.user2 = trimmedName;
         if (avatar) f.user2Avatar = avatar;
       }
     });
@@ -74,7 +82,7 @@ app.post('/api/users/register', (req, res) => {
     // 新用户
     user = {
       userId,
-      nickname: nickname.trim(),
+      nickname: trimmedName,
       avatar: avatar || '🐱',
       created_at: new Date().toISOString(),
       lastLogin: new Date().toISOString()
@@ -102,10 +110,24 @@ app.get('/api/messages', (req, res) => {
   const data = loadData();
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 20;
+  const userId = req.query.userId || '';
+  
   const messages = data.messages
     .sort((a, b) => b.id - a.id)
     .slice((page - 1) * limit, page * limit)
-    .map(msg => ({ ...msg, time: formatTime(msg.created_at) }));
+    .map(msg => {
+      const msgData = { ...msg, time: formatTime(msg.created_at) };
+      // 返回点赞数据
+      msgData.likes = msg.likes || 0;
+      // 如果提供了userId，返回当前用户是否点过赞
+      if (userId && msg.likedUsers) {
+        msgData.isLiked = msg.likedUsers.includes(userId);
+      } else {
+        msgData.isLiked = false;
+      }
+      return msgData;
+    });
+  
   res.json({ messages });
 });
 
@@ -121,6 +143,8 @@ app.post('/api/messages', (req, res) => {
     avatar: avatar || '🐱',
     content: content.trim(),
     userId: userId || '',
+    likes: 0,
+    likedUsers: [],
     created_at: new Date().toISOString()
   };
   data.messages.push(newMsg);
@@ -154,6 +178,8 @@ app.post('/api/messages/voice', (req, res) => {
     audioUrl: `/uploads/voice_${audioId}.mp3`,
     duration: duration || 0,
     userId: userId || '',
+    likes: 0,
+    likedUsers: [],
     created_at: new Date().toISOString()
   };
   data.messages.push(newMsg);
@@ -169,14 +195,59 @@ app.delete('/api/messages/:id', (req, res) => {
   const data = loadData();
   const msg = data.messages.find(m => m.id === parseInt(req.params.id));
   if (!msg) return res.status(404).json({ error: '留言不存在' });
-
+  
   // 验证身份：优先用userId，兼容旧数据用nickname
   const isOwner = (userId && msg.userId === userId) || (!userId && msg.nickname === nickname);
   if (!isOwner) return res.status(403).json({ error: '只能删除自己的留言' });
-
+  
   data.messages = data.messages.filter(m => m.id !== parseInt(req.params.id));
   saveData(data);
   res.json({ success: true });
+});
+
+// ========== 点赞 API ==========
+
+// 点赞/取消点赞留言
+app.post('/api/messages/:id/like', (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+  
+  const data = loadData();
+  const msg = data.messages.find(m => m.id === parseInt(req.params.id));
+  if (!msg) return res.status(404).json({ error: '留言不存在' });
+  
+  // 初始化点赞数据
+  if (!msg.likes) msg.likes = 0;
+  if (!msg.likedUsers) msg.likedUsers = [];
+  
+  const userIndex = msg.likedUsers.indexOf(userId);
+  
+  if (userIndex === -1) {
+    // 未点赞，添加点赞
+    msg.likedUsers.push(userId);
+    msg.likes = msg.likedUsers.length;
+    saveData(data);
+    res.json({ success: true, liked: true, likes: msg.likes });
+  } else {
+    // 已点赞，取消点赞
+    msg.likedUsers.splice(userIndex, 1);
+    msg.likes = msg.likedUsers.length;
+    saveData(data);
+    res.json({ success: true, liked: false, likes: msg.likes });
+  }
+});
+
+// 获取留言的点赞状态（用于初始化）
+app.get('/api/messages/:id/like', (req, res) => {
+  const { userId } = req.query;
+  const data = loadData();
+  const msg = data.messages.find(m => m.id === parseInt(req.params.id));
+  if (!msg) return res.status(404).json({ error: '留言不存在' });
+  
+  const likes = msg.likes || 0;
+  const liked = userId && msg.likedUsers && msg.likedUsers.includes(userId);
+  
+  res.json({ likes, liked: !!liked });
 });
 
 // ========== 好友系统 API ==========
@@ -189,11 +260,8 @@ app.post('/api/friends/request', (req, res) => {
 
   const data = loadData();
 
-  // 检查是否已经是好友（用userId或nickname匹配）
+  // 检查是否已经是好友（用昵称匹配，最准确）
   const isFriend = data.friends.some(f => {
-    if (fromUserId && f.user1Id && f.user2Id) {
-      return f.user1Id === fromUserId || f.user2Id === fromUserId;
-    }
     return (f.user1 === fromNickname && f.user2 === toNickname) ||
            (f.user1 === toNickname && f.user2 === fromNickname);
   });
@@ -440,25 +508,10 @@ const PK_COMMENTS = {
   ]
 };
 
-// 根据等级差获取随机评语
-function getPkComment(myLevel, friendLevel, iWin) {
-  const diff = Math.abs(myLevel - friendLevel);
-
-  if (diff === 0) {
-    // 平局
-    const comments = PK_COMMENTS.draw;
-    return comments[Math.floor(Math.random() * comments.length)];
-  }
-
-  const isBig = diff >= 5;
-
-  if (iWin) {
-    const pool = isBig ? PK_COMMENTS.bigWin : PK_COMMENTS.closeWin;
-    return pool[Math.floor(Math.random() * pool.length)];
-  } else {
-    const pool = isBig ? PK_COMMENTS.bigLose : PK_COMMENTS.closeLose;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
+// 根据PK结果类别获取随机评语
+function getPkComment(category) {
+  const pool = PK_COMMENTS[category];
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // PK 接口
@@ -482,20 +535,27 @@ app.post('/api/friends/pk', (req, res) => {
   const myPower = myLevel * 100 + myExp + Math.floor(Math.random() * 200);
   const friendPower = friendLevel * 100 + friendExp + Math.floor(Math.random() * 200);
 
-  const iWin = myPower >= friendPower;
-  const isDraw = myPower === friendPower;
+  // 统一判断结果和评语类别，确保完全呼应
+  const powerDiff = myPower - friendPower;
+  const absDiff = Math.abs(powerDiff);
 
-  let result, comment;
-  if (isDraw) {
+  let result, commentCategory;
+
+  if (absDiff <= 20) {
+    // 战力差距极小 → 平局
     result = 'draw';
-    comment = getPkComment(myLevel, friendLevel, true);
-  } else if (iWin) {
+    commentCategory = 'draw';
+  } else if (powerDiff > 0) {
+    // 我赢了
     result = 'win';
-    comment = getPkComment(myLevel, friendLevel, true);
+    commentCategory = absDiff >= 150 ? 'bigWin' : 'closeWin';
   } else {
+    // 我输了
     result = 'lose';
-    comment = getPkComment(myLevel, friendLevel, false);
+    commentCategory = absDiff >= 150 ? 'bigLose' : 'closeLose';
   }
+
+  const comment = getPkComment(commentCategory);
 
   // 保存PK记录
   const pkId = data.pkRecords.length > 0
