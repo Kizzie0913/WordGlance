@@ -24,15 +24,77 @@ function loadData() {
       if (!data.friendRequests) data.friendRequests = [];
       if (!data.pkRecords) data.pkRecords = [];
       if (!data.messages) data.messages = [];
+      if (!data.users) data.users = [];
       return data;
     }
   } catch (e) {}
-  return { messages: [], friends: [], friendRequests: [], pkRecords: [] };
+  return { messages: [], friends: [], friendRequests: [], pkRecords: [], users: [] };
 }
 
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
+
+// ========== 用户资料 API ==========
+
+// 注册/更新用户资料
+app.post('/api/users/register', (req, res) => {
+  const { userId, nickname, avatar } = req.body;
+  if (!userId || !nickname) return res.status(400).json({ error: '参数不完整' });
+
+  const data = loadData();
+  let user = data.users.find(u => u.userId === userId);
+
+  if (user) {
+    // 老用户：更新昵称和头像
+    user.nickname = nickname.trim();
+    if (avatar) user.avatar = avatar;
+    user.lastLogin = new Date().toISOString();
+    // 同步更新所有旧留言中的昵称和头像
+    data.messages.forEach(msg => {
+      if (msg.userId === userId) {
+        msg.nickname = nickname.trim();
+        if (avatar) msg.avatar = avatar;
+      }
+    });
+    // 同步更新好友关系中的信息
+    data.friends.forEach(f => {
+      if (f.user1Id === userId) {
+        f.user1 = nickname.trim();
+        if (avatar) f.user1Avatar = avatar;
+      }
+      if (f.user2Id === userId) {
+        f.user2 = nickname.trim();
+        if (avatar) f.user2Avatar = avatar;
+      }
+    });
+    saveData(data);
+    res.json({ success: true, user, isNew: false });
+  } else {
+    // 新用户
+    user = {
+      userId,
+      nickname: nickname.trim(),
+      avatar: avatar || '🐱',
+      created_at: new Date().toISOString(),
+      lastLogin: new Date().toISOString()
+    };
+    data.users.push(user);
+    saveData(data);
+    res.json({ success: true, user, isNew: true });
+  }
+});
+
+// 获取用户资料（通过userId）
+app.get('/api/users/profile', (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  const data = loadData();
+  const user = data.users.find(u => u.userId === userId);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+  res.json({ user });
+});
 
 // ========== 留言板 API ==========
 
@@ -48,7 +110,7 @@ app.get('/api/messages', (req, res) => {
 });
 
 app.post('/api/messages', (req, res) => {
-  const { nickname, avatar, content } = req.body;
+  const { nickname, avatar, content, userId } = req.body;
   if (!content || !content.trim()) return res.status(400).json({ error: '留言内容不能为空' });
   if (!nickname || !nickname.trim()) return res.status(400).json({ error: '昵称不能为空' });
   const data = loadData();
@@ -58,6 +120,7 @@ app.post('/api/messages', (req, res) => {
     nickname: nickname.trim(),
     avatar: avatar || '🐱',
     content: content.trim(),
+    userId: userId || '',
     created_at: new Date().toISOString()
   };
   data.messages.push(newMsg);
@@ -67,7 +130,7 @@ app.post('/api/messages', (req, res) => {
 
 // 语音留言
 app.post('/api/messages/voice', (req, res) => {
-  const { nickname, avatar, audioData, duration } = req.body;
+  const { nickname, avatar, audioData, duration, userId } = req.body;
   if (!audioData) return res.status(400).json({ error: '音频数据不能为空' });
   if (!nickname || !nickname.trim()) return res.status(400).json({ error: '昵称不能为空' });
 
@@ -90,6 +153,7 @@ app.post('/api/messages/voice', (req, res) => {
     type: 'voice',
     audioUrl: `/uploads/voice_${audioId}.mp3`,
     duration: duration || 0,
+    userId: userId || '',
     created_at: new Date().toISOString()
   };
   data.messages.push(newMsg);
@@ -101,7 +165,15 @@ app.post('/api/messages/voice', (req, res) => {
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.delete('/api/messages/:id', (req, res) => {
+  const { userId, nickname } = req.body || {};
   const data = loadData();
+  const msg = data.messages.find(m => m.id === parseInt(req.params.id));
+  if (!msg) return res.status(404).json({ error: '留言不存在' });
+
+  // 验证身份：优先用userId，兼容旧数据用nickname
+  const isOwner = (userId && msg.userId === userId) || (!userId && msg.nickname === nickname);
+  if (!isOwner) return res.status(403).json({ error: '只能删除自己的留言' });
+
   data.messages = data.messages.filter(m => m.id !== parseInt(req.params.id));
   saveData(data);
   res.json({ success: true });
@@ -111,17 +183,20 @@ app.delete('/api/messages/:id', (req, res) => {
 
 // 发送好友请求
 app.post('/api/friends/request', (req, res) => {
-  const { fromNickname, fromAvatar, fromLevel, fromTitle, fromExp, toNickname } = req.body;
+  const { fromNickname, fromAvatar, fromLevel, fromTitle, fromExp, toNickname, fromUserId } = req.body;
   if (!fromNickname || !toNickname) return res.status(400).json({ error: '昵称不能为空' });
   if (fromNickname === toNickname) return res.status(400).json({ error: '不能添加自己为好友' });
 
   const data = loadData();
 
-  // 检查是否已经是好友
-  const isFriend = data.friends.some(f =>
-    (f.user1 === fromNickname && f.user2 === toNickname) ||
-    (f.user1 === toNickname && f.user2 === fromNickname)
-  );
+  // 检查是否已经是好友（用userId或nickname匹配）
+  const isFriend = data.friends.some(f => {
+    if (fromUserId && f.user1Id && f.user2Id) {
+      return f.user1Id === fromUserId || f.user2Id === fromUserId;
+    }
+    return (f.user1 === fromNickname && f.user2 === toNickname) ||
+           (f.user1 === toNickname && f.user2 === fromNickname);
+  });
   if (isFriend) return res.status(400).json({ error: '你们已经是好友了' });
 
   // 检查是否已有待处理的请求
@@ -140,6 +215,8 @@ app.post('/api/friends/request', (req, res) => {
     data.friends.push({
       user1: fromNickname,
       user2: toNickname,
+      user1Id: fromUserId || '',
+      user2Id: reverseReq.fromUserId || '',
       user1Avatar: fromAvatar,
       user2Avatar: reverseReq.fromAvatar,
       user1Level: fromLevel,
@@ -161,6 +238,7 @@ app.post('/api/friends/request', (req, res) => {
   data.friendRequests.push({
     id: reqId,
     from: fromNickname,
+    fromUserId: fromUserId || '',
     fromAvatar: fromAvatar || '🐱',
     fromLevel: fromLevel || 1,
     fromTitle: fromTitle || 'Noobslayer',
@@ -187,7 +265,7 @@ app.get('/api/friends/requests', (req, res) => {
 
 // 接受/拒绝好友请求
 app.post('/api/friends/respond', (req, res) => {
-  const { requestId, accept, toNickname, toAvatar, toLevel, toTitle, toExp } = req.body;
+  const { requestId, accept, toNickname, toAvatar, toLevel, toTitle, toExp, toUserId } = req.body;
   if (!requestId || !toNickname) return res.status(400).json({ error: '参数不完整' });
 
   const data = loadData();
@@ -201,6 +279,8 @@ app.post('/api/friends/respond', (req, res) => {
     data.friends.push({
       user1: request.from,
       user2: toNickname,
+      user1Id: request.fromUserId || '',
+      user2Id: toUserId || '',
       user1Avatar: request.fromAvatar,
       user2Avatar: toAvatar || '🐱',
       user1Level: request.fromLevel,
@@ -222,19 +302,41 @@ app.post('/api/friends/respond', (req, res) => {
 
 // 获取好友列表
 app.get('/api/friends', (req, res) => {
-  const { nickname } = req.query;
-  if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
+  const { nickname, userId } = req.query;
+  if (!nickname && !userId) return res.status(400).json({ error: '参数不能为空' });
 
   const data = loadData();
-  const friendships = data.friends.filter(f =>
-    f.user1 === nickname || f.user2 === nickname
-  );
+  let friendships;
+
+  if (userId) {
+    // 优先用userId查找
+    friendships = data.friends.filter(f =>
+      f.user1Id === userId || f.user2Id === userId
+    );
+    // 如果userId查不到，fallback到nickname
+    if (friendships.length === 0 && nickname) {
+      friendships = data.friends.filter(f =>
+        f.user1 === nickname || f.user2 === nickname
+      );
+    }
+  } else {
+    friendships = data.friends.filter(f =>
+      f.user1 === nickname || f.user2 === nickname
+    );
+  }
 
   // 转换为好友视角
+  const currentUserId = userId || '';
   const friends = friendships.map(f => {
-    const isUser1 = f.user1 === nickname;
+    let isUser1;
+    if (currentUserId && f.user1Id) {
+      isUser1 = f.user1Id === currentUserId;
+    } else {
+      isUser1 = f.user1 === nickname;
+    }
     return {
       nickname: isUser1 ? f.user2 : f.user1,
+      userId: isUser1 ? (f.user2Id || '') : (f.user1Id || ''),
       avatar: isUser1 ? f.user2Avatar : f.user1Avatar,
       level: isUser1 ? f.user2Level : f.user1Level,
       title: isUser1 ? f.user2Title : f.user1Title,
@@ -248,15 +350,23 @@ app.get('/api/friends', (req, res) => {
 
 // 删除好友
 app.delete('/api/friends', (req, res) => {
-  const { nickname, friendNickname } = req.body;
-  if (!nickname || !friendNickname) return res.status(400).json({ error: '参数不完整' });
+  const { nickname, friendNickname, userId } = req.body;
+  if ((!nickname && !userId) || !friendNickname) return res.status(400).json({ error: '参数不完整' });
 
   const data = loadData();
   const before = data.friends.length;
-  data.friends = data.friends.filter(f =>
-    !((f.user1 === nickname && f.user2 === friendNickname) ||
-      (f.user1 === friendNickname && f.user2 === nickname))
-  );
+  data.friends = data.friends.filter(f => {
+    // 用userId匹配
+    if (userId && f.user1Id && f.user2Id) {
+      const mySide = f.user1Id === userId ? 'user1' : (f.user2Id === userId ? 'user2' : '');
+      if (!mySide) return true; // 不涉及我，保留
+      const otherNickname = mySide === 'user1' ? f.user2 : f.user1;
+      return otherNickname !== friendNickname; // 删除与目标好友的关系
+    }
+    // fallback用nickname匹配
+    return !((f.user1 === nickname && f.user2 === friendNickname) ||
+             (f.user1 === friendNickname && f.user2 === nickname));
+  });
   if (data.friends.length === before) {
     return res.status(404).json({ error: '好友关系不存在' });
   }
