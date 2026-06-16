@@ -54,6 +54,7 @@ app.post('/api/users/register', (req, res) => {
   let user = data.users.find(u => u.userId === userId);
 
   if (user) {
+    const oldNickname = user.nickname;  // 保存旧昵称，用于兼容旧数据
     // 老用户：更新昵称和头像
     user.nickname = trimmedName;
     if (avatar) user.avatar = avatar;
@@ -65,14 +66,22 @@ app.post('/api/users/register', (req, res) => {
         if (avatar) msg.avatar = avatar;
       }
     });
-    // 同步更新好友关系中的信息
+    // 同步更新好友关系中的信息（兼容旧数据：同时用userId和旧昵称匹配）
     data.friends.forEach(f => {
       if (f.user1Id === userId) {
         f.user1 = trimmedName;
         if (avatar) f.user1Avatar = avatar;
+      } else if (f.user1 === oldNickname) {
+        f.user1 = trimmedName;
+        f.user1Id = userId;
+        if (avatar) f.user1Avatar = avatar;
       }
       if (f.user2Id === userId) {
         f.user2 = trimmedName;
+        if (avatar) f.user2Avatar = avatar;
+      } else if (f.user2 === oldNickname) {
+        f.user2 = trimmedName;
+        f.user2Id = userId;
         if (avatar) f.user2Avatar = avatar;
       }
     });
@@ -116,7 +125,7 @@ app.get('/api/messages', (req, res) => {
     .sort((a, b) => b.id - a.id)
     .slice((page - 1) * limit, page * limit)
     .map(msg => {
-      const msgData = { ...msg, time: formatTime(msg.created_at) };
+      const msgData = { ...msg, time: msg.created_at || new Date().toISOString() };
       // 返回点赞数据
       msgData.likes = msg.likes || 0;
       // 如果提供了userId，返回当前用户是否点过赞
@@ -149,7 +158,7 @@ app.post('/api/messages', (req, res) => {
   };
   data.messages.push(newMsg);
   saveData(data);
-  res.json({ success: true, message: { ...newMsg, time: '刚刚' } });
+  res.json({ success: true, message: { ...newMsg, time: newMsg.created_at } });
 });
 
 // 语音留言
@@ -184,7 +193,7 @@ app.post('/api/messages/voice', (req, res) => {
   };
   data.messages.push(newMsg);
   saveData(data);
-  res.json({ success: true, message: { ...newMsg, time: '刚刚' } });
+  res.json({ success: true, message: { ...newMsg, time: newMsg.created_at } });
 });
 
 // 静态文件服务（音频文件）
@@ -260,8 +269,17 @@ app.post('/api/friends/request', (req, res) => {
 
   const data = loadData();
 
-  // 检查是否已经是好友（用昵称匹配，最准确）
+  // 查找对方的 userId
+  const toUser = data.users.find(u => u.nickname === toNickname);
+  const toUserId = toUser ? toUser.userId : '';
+
+  // 检查是否已经是好友（优先用userId匹配，最准确，兼容改昵称的情况）
   const isFriend = data.friends.some(f => {
+    if (f.user1Id && f.user2Id && fromUserId && toUserId) {
+      return (f.user1Id === fromUserId && f.user2Id === toUserId) ||
+             (f.user1Id === toUserId && f.user2Id === fromUserId);
+    }
+    // 兼容旧数据：用昵称匹配
     return (f.user1 === fromNickname && f.user2 === toNickname) ||
            (f.user1 === toNickname && f.user2 === fromNickname);
   });
