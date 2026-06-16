@@ -18,7 +18,13 @@ app.use(bodyParser.urlencoded({ extended: true }));
 function loadData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      var data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+      // 兼容旧数据：确保包含所有字段
+      if (!data.friends) data.friends = [];
+      if (!data.friendRequests) data.friendRequests = [];
+      if (!data.pkRecords) data.pkRecords = [];
+      if (!data.messages) data.messages = [];
+      return data;
     }
   } catch (e) {}
   return { messages: [], friends: [], friendRequests: [], pkRecords: [] };
