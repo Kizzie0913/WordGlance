@@ -123,11 +123,14 @@ async function saveDataToGitHub(data, sha = null) {
   }
 }
 
-// 内存缓存
+// 内存缓存 + 写入锁（防止并发写入覆盖数据）
 let dataCache = null;
 let dataSha = null;
 let lastLoadTime = 0;
-const CACHE_TTL = 0; // 每次都从GitHub读取最新数据，确保同步
+const CACHE_TTL = 5000; // 5秒缓存，减少GitHub API调用
+
+// 写入锁队列：确保一次只有一个写操作，防止并发覆盖
+let writeLock = Promise.resolve();
 
 async function loadData() {
   const now = Date.now();
@@ -145,7 +148,57 @@ async function loadData() {
 async function saveData(data) {
   dataCache = data;
   lastLoadTime = Date.now();
-  dataSha = await saveDataToGitHub(data, dataSha);
+  // 最多重试3次，防止SHA冲突导致保存失败
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      const result = await saveDataToGitHub(data, dataSha);
+      dataSha = result;
+      return;
+    } catch (err) {
+      attempts++;
+      console.error(`保存失败 (第${attempts}次):`, err.message);
+      if (attempts >= 3) break;
+      // 重新加载数据获取最新SHA
+      const fresh = await loadDataFromGitHub();
+      dataSha = fresh.sha;
+      // 合并：将当前修改应用到最新数据上
+      fresh.data.messages = data.messages;
+      fresh.data.friends = data.friends;
+      fresh.data.friendRequests = data.friendRequests;
+      fresh.data.pkRecords = data.pkRecords;
+      // 合并users表：保留最新的用户数据
+      data.users.forEach(u => {
+        const idx = fresh.data.users.findIndex(fu => fu.userId === u.userId);
+        if (idx >= 0) {
+          // 如果有lastSync，用更新的版本
+          if (u.lastSync && (!fresh.data.users[idx].lastSync || u.lastSync > fresh.data.users[idx].lastSync)) {
+            fresh.data.users[idx] = u;
+          }
+        } else {
+          fresh.data.users.push(u);
+        }
+      });
+      dataCache = fresh.data;
+    }
+  }
+}
+
+// 带写入锁的数据修改：确保一次只有一个操作修改数据
+async function withWriteLock(modifyFn) {
+  return new Promise((resolve, reject) => {
+    writeLock = writeLock.then(async () => {
+      try {
+        const data = await loadData();
+        await modifyFn(data);
+        await saveData(data);
+        resolve();
+      } catch (err) {
+        console.error('写入锁内操作失败:', err);
+        reject(err);
+      }
+    });
+  });
 }
 
 // ========== 用户资料 API ==========
@@ -155,67 +208,73 @@ app.post('/api/users/register', async (req, res) => {
   if (!userId || !nickname) return res.status(400).json({ error: '参数不完整' });
 
   const trimmedName = nickname.trim();
-  
+
   try {
-    const data = await loadData();
+    let resultUser = null;
+    let isNew = false;
 
-    const existingUser = data.users.find(u => u.nickname === trimmedName && u.userId !== userId);
-    if (existingUser) {
-      return res.status(409).json({ error: '该昵称已被使用，请换一个独特的昵称' });
-    }
+    await withWriteLock(data => {
+      const existingUser = data.users.find(u => u.nickname === trimmedName && u.userId !== userId);
+      if (existingUser) {
+        throw Object.assign(new Error('该昵称已被使用，请换一个独特的昵称'), { status: 409 });
+      }
 
-    let user = data.users.find(u => u.userId === userId);
-    const oldNickname = user ? user.nickname : null;
+      let user = data.users.find(u => u.userId === userId);
+      const oldNickname = user ? user.nickname : null;
 
-    if (user) {
-      user.nickname = trimmedName;
-      if (avatar) user.avatar = avatar;
-      user.lastLogin = new Date().toISOString();
+      if (user) {
+        user.nickname = trimmedName;
+        if (avatar) user.avatar = avatar;
+        user.lastLogin = new Date().toISOString();
 
-      data.messages.forEach(msg => {
-        if (msg.userId === userId) {
-          msg.nickname = trimmedName;
-          if (avatar) msg.avatar = avatar;
-        }
-      });
+        data.messages.forEach(msg => {
+          if (msg.userId === userId) {
+            msg.nickname = trimmedName;
+            if (avatar) msg.avatar = avatar;
+          }
+        });
 
-      data.friends.forEach(f => {
-        if (f.user1Id === userId) {
-          f.user1 = trimmedName;
-          if (avatar) f.user1Avatar = avatar;
-        } else if (f.user1 === oldNickname) {
-          f.user1 = trimmedName;
-          f.user1Id = userId;
-          if (avatar) f.user1Avatar = avatar;
-        }
-        if (f.user2Id === userId) {
-          f.user2 = trimmedName;
-          if (avatar) f.user2Avatar = avatar;
-        } else if (f.user2 === oldNickname) {
-          f.user2 = trimmedName;
-          f.user2Id = userId;
-          if (avatar) f.user2Avatar = avatar;
-        }
-      });
+        data.friends.forEach(f => {
+          if (f.user1Id === userId) {
+            f.user1 = trimmedName;
+            if (avatar) f.user1Avatar = avatar;
+          } else if (f.user1 === oldNickname) {
+            f.user1 = trimmedName;
+            f.user1Id = userId;
+            if (avatar) f.user1Avatar = avatar;
+          }
+          if (f.user2Id === userId) {
+            f.user2 = trimmedName;
+            if (avatar) f.user2Avatar = avatar;
+          } else if (f.user2 === oldNickname) {
+            f.user2 = trimmedName;
+            f.user2Id = userId;
+            if (avatar) f.user2Avatar = avatar;
+          }
+        });
 
-      await saveData(data);
-      return res.json({ success: true, user, isNew: false });
-    } else {
-      const newUser = {
-        userId: userId,
-        nickname: trimmedName,
-        avatar: avatar || '🐱',
-        level: 1,
-        title: 'Noobslayer',
-        exp: 0,
-        createdAt: new Date().toISOString(),
-        lastLogin: new Date().toISOString()
-      };
-      data.users.push(newUser);
-      await saveData(data);
-      return res.json({ success: true, user: newUser, isNew: true });
-    }
+        resultUser = user;
+        isNew = false;
+      } else {
+        const newUser = {
+          userId: userId,
+          nickname: trimmedName,
+          avatar: avatar || '🐱',
+          level: 1,
+          title: 'Noobslayer',
+          exp: 0,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString()
+        };
+        data.users.push(newUser);
+        resultUser = newUser;
+        isNew = true;
+      }
+    });
+
+    return res.json({ success: true, user: resultUser, isNew });
   } catch (err) {
+    if (err.status) return res.status(err.status).json({ error: err.message });
     console.error('Register error:', err);
     return res.status(500).json({ error: '服务器错误' });
   }
@@ -242,57 +301,62 @@ app.post('/api/users/sync', async (req, res) => {
   if (!userId && !nickname) return res.status(400).json({ error: 'userId或nickname不能为空' });
 
   try {
-    const data = await loadData();
-    let user = null;
+    let resultUser = null;
+    let isNew = false;
 
-    if (userId) {
-      user = data.users.find(u => u.userId === userId);
-    }
-    if (!user && nickname) {
-      user = data.users.find(u => u.nickname === nickname);
-    }
+    await withWriteLock(data => {
+      let user = null;
 
-    if (user) {
-      if (level !== undefined) user.level = level;
-      if (title !== undefined) user.title = title;
-      if (exp !== undefined) user.exp = exp;
-      if (avatar !== undefined) user.avatar = avatar;
-      user.lastSync = new Date().toISOString();
+      if (userId) {
+        user = data.users.find(u => u.userId === userId);
+      }
+      if (!user && nickname) {
+        user = data.users.find(u => u.nickname === nickname);
+      }
 
-      // 同步更新 friends 表中该用户的数据
-      data.friends.forEach(f => {
-        if (f.user1Id === userId || f.user1 === nickname) {
-          f.user1Level = user.level;
-          f.user1Title = user.title;
-          f.user1Exp = user.exp;
-          if (avatar) f.user1Avatar = user.avatar;
-        }
-        if (f.user2Id === userId || f.user2 === nickname) {
-          f.user2Level = user.level;
-          f.user2Title = user.title;
-          f.user2Exp = user.exp;
-          if (avatar) f.user2Avatar = user.avatar;
-        }
-      });
+      if (user) {
+        if (level !== undefined) user.level = level;
+        if (title !== undefined) user.title = title;
+        if (exp !== undefined) user.exp = exp;
+        if (avatar !== undefined) user.avatar = avatar;
+        user.lastSync = new Date().toISOString();
 
-      await saveData(data);
-      return res.json({ success: true, user });
-    } else {
-      // 用户不存在，自动创建
-      const newUser = {
-        userId: userId || '',
-        nickname: nickname || '',
-        avatar: avatar || '🐱',
-        level: level || 1,
-        title: title || 'Noobslayer',
-        exp: exp || 0,
-        createdAt: new Date().toISOString(),
-        lastSync: new Date().toISOString()
-      };
-      data.users.push(newUser);
-      await saveData(data);
-      return res.json({ success: true, user: newUser, isNew: true });
-    }
+        // 同步更新 friends 表中该用户的数据
+        data.friends.forEach(f => {
+          if (f.user1Id === userId || f.user1 === nickname) {
+            f.user1Level = user.level;
+            f.user1Title = user.title;
+            f.user1Exp = user.exp;
+            if (avatar) f.user1Avatar = user.avatar;
+          }
+          if (f.user2Id === userId || f.user2 === nickname) {
+            f.user2Level = user.level;
+            f.user2Title = user.title;
+            f.user2Exp = user.exp;
+            if (avatar) f.user2Avatar = user.avatar;
+          }
+        });
+
+        resultUser = user;
+      } else {
+        // 用户不存在，自动创建
+        const newUser = {
+          userId: userId || '',
+          nickname: nickname || '',
+          avatar: avatar || '🐱',
+          level: level || 1,
+          title: title || 'Noobslayer',
+          exp: exp || 0,
+          createdAt: new Date().toISOString(),
+          lastSync: new Date().toISOString()
+        };
+        data.users.push(newUser);
+        resultUser = newUser;
+        isNew = true;
+      }
+    });
+
+    res.json({ success: true, user: resultUser, isNew });
   } catch (err) {
     console.error('Sync error:', err);
     return res.status(500).json({ error: '服务器错误' });
@@ -340,7 +404,6 @@ app.post('/api/messages', async (req, res) => {
   if (!nickname || !nickname.trim()) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const data = await loadData();
     const newMessage = {
       id: Date.now(),
       userId: userId || '',
@@ -352,8 +415,10 @@ app.post('/api/messages', async (req, res) => {
       likedUsers: [],
       createdAt: new Date().toISOString()
     };
-    data.messages.push(newMessage);
-    await saveData(data);
+
+    await withWriteLock(data => {
+      data.messages.push(newMessage);
+    });
 
     res.json({
       success: true,
@@ -373,28 +438,33 @@ app.post('/api/messages/:id/like', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId不能为空' });
 
   try {
-    const data = await loadData();
     const messageId = parseInt(req.params.id);
-    const msg = data.messages.find(m => m.id === messageId);
-    
-    if (!msg) return res.status(404).json({ error: '留言不存在' });
-    
-    const likedUsers = msg.likedUsers || [];
-    const userIndex = likedUsers.indexOf(userId);
+    let result = null;
 
-    if (userIndex === -1) {
-      likedUsers.push(userId);
-      msg.likedUsers = likedUsers;
-      msg.likes = likedUsers.length;
-      await saveData(data);
-      res.json({ success: true, liked: true, likes: likedUsers.length });
-    } else {
-      likedUsers.splice(userIndex, 1);
-      msg.likedUsers = likedUsers;
-      msg.likes = likedUsers.length;
-      await saveData(data);
-      res.json({ success: true, liked: false, likes: likedUsers.length });
+    await withWriteLock(data => {
+      const msg = data.messages.find(m => m.id === messageId);
+      if (!msg) { result = { error: '留言不存在', status: 404 }; return; }
+
+      const likedUsers = msg.likedUsers || [];
+      const userIndex = likedUsers.indexOf(userId);
+
+      if (userIndex === -1) {
+        likedUsers.push(userId);
+        msg.likedUsers = likedUsers;
+        msg.likes = likedUsers.length;
+        result = { liked: true, likes: likedUsers.length };
+      } else {
+        likedUsers.splice(userIndex, 1);
+        msg.likedUsers = likedUsers;
+        msg.likes = likedUsers.length;
+        result = { liked: false, likes: likedUsers.length };
+      }
+    });
+
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
+    res.json({ success: true, ...result });
   } catch (err) {
     console.error('Like error:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -407,16 +477,21 @@ app.delete('/api/messages/:id', async (req, res) => {
   if (!userId) return res.status(400).json({ error: 'userId不能为空' });
 
   try {
-    const data = await loadData();
     const messageId = parseInt(req.params.id);
-    const msg = data.messages.find(m => m.id === messageId);
-    
-    if (!msg) return res.status(404).json({ error: '留言不存在' });
-    if (msg.userId !== userId) return res.status(403).json({ error: '只能删除自己的留言' });
-    
-    data.messages = data.messages.filter(m => m.id !== messageId);
-    await saveData(data);
-    
+    let result = null;
+
+    await withWriteLock(data => {
+      const msg = data.messages.find(m => m.id === messageId);
+      if (!msg) { result = { error: '留言不存在', status: 404 }; return; }
+      if (msg.userId !== userId) { result = { error: '只能删除自己的留言', status: 403 }; return; }
+
+      data.messages = data.messages.filter(m => m.id !== messageId);
+      result = { deleted: true };
+    });
+
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
     res.json({ success: true, message: '留言已删除' });
   } catch (err) {
     console.error('Delete message error:', err);
@@ -431,19 +506,17 @@ app.post('/api/messages/voice', async (req, res) => {
   if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const data = await loadData();
-    
     const msgId = Date.now();
     const base64Data = audioData.replace(/^data:audio\/\w+;base64,/, '');
-    
-    // 同时保存到磁盘（缓存加速）和数据（持久化防丢失）
+
+    // 保存音频到磁盘（缓存加速）
     const audioDir = path.join(__dirname, 'audio');
     if (!fs.existsSync(audioDir)) {
       fs.mkdirSync(audioDir, { recursive: true });
     }
     const audioFilename = `audio_${msgId}.mp3`;
     fs.writeFileSync(path.join(audioDir, audioFilename), Buffer.from(base64Data, 'base64'));
-    
+
     // 创建留言记录 - base64存在数据中，服务重启不会丢
     const newMsg = {
       id: msgId,
@@ -459,14 +532,16 @@ app.post('/api/messages/voice', async (req, res) => {
       likedUsers: [],
       createdAt: new Date().toISOString()
     };
-    
-    data.messages.push(newMsg);
-    await saveData(data);
-    
+
+    // 使用写入锁，防止并发覆盖导致语音消息丢失
+    await withWriteLock(data => {
+      data.messages.push(newMsg);
+    });
+
     // 返回给客户端时不带base64（节省流量）
     const responseMsg = { ...newMsg };
     delete responseMsg.audioBase64;
-    
+
     res.json({ success: true, message: responseMsg });
   } catch (err) {
     console.error('Voice message error:', err);
@@ -526,72 +601,76 @@ app.post('/api/friends/request', async (req, res) => {
   if (fromNickname === toNickname) return res.status(400).json({ error: '不能添加自己为好友' });
 
   try {
-    const data = await loadData();
+    let result = null;
 
-    const toUser = data.users.find(u => u.nickname === toNickname);
-    const toUserId = toUser ? toUser.userId : '';
+    await withWriteLock(data => {
+      const toUser = data.users.find(u => u.nickname === toNickname);
+      const toUserId = toUser ? toUser.userId : '';
 
-    const isFriend = data.friends.some(f => {
-      if (f.user1Id && f.user2Id && fromUserId && toUserId) {
-        return (f.user1Id === fromUserId && f.user2Id === toUserId) ||
-               (f.user1Id === toUserId && f.user2Id === fromUserId);
+      const isFriend = data.friends.some(f => {
+        if (f.user1Id && f.user2Id && fromUserId && toUserId) {
+          return (f.user1Id === fromUserId && f.user2Id === toUserId) ||
+                 (f.user1Id === toUserId && f.user2Id === fromUserId);
+        }
+        return (f.user1 === fromNickname && f.user2 === toNickname) ||
+               (f.user1 === toNickname && f.user2 === fromNickname);
+      });
+
+      if (isFriend) { result = { error: '你们已经是好友了', status: 400 }; return; }
+
+      const existingReq = data.friendRequests.find(r =>
+        r.sender === fromNickname && r.recver === toNickname && r.status === 'pending'
+      );
+      if (existingReq) { result = { error: '已发送过好友请求，等待对方确认', status: 400 }; return; }
+
+      const reverseReq = data.friendRequests.find(r =>
+        r.sender === toNickname && r.recver === fromNickname && r.status === 'pending'
+      );
+
+      if (reverseReq) {
+        reverseReq.status = 'accepted';
+
+        data.friends.push({
+          id: Date.now(),
+          user1Id: fromUserId || '',
+          user1: fromNickname,
+          user1Avatar: fromAvatar || '🐱',
+          user1Level: fromLevel || 1,
+          user1Title: fromTitle || 'Noobslayer',
+          user1Exp: fromExp || 0,
+          user2Id: reverseReq.senderUserId || '',
+          user2: toNickname,
+          user2Avatar: reverseReq.senderAvatar,
+          user2Level: reverseReq.senderLevel,
+          user2Title: reverseReq.senderTitle,
+          user2Exp: reverseReq.senderExp,
+          createdAt: new Date().toISOString()
+        });
+
+        result = { autoAccepted: true, message: '已自动成为好友' };
+        return;
       }
-      return (f.user1 === fromNickname && f.user2 === toNickname) ||
-             (f.user1 === toNickname && f.user2 === fromNickname);
-    });
 
-    if (isFriend) return res.status(400).json({ error: '你们已经是好友了' });
-
-    const existingReq = data.friendRequests.find(r => 
-      r.sender === fromNickname && r.recver === toNickname && r.status === 'pending'
-    );
-    if (existingReq) {
-      return res.status(400).json({ error: '已发送过好友请求，等待对方确认' });
-    }
-
-    const reverseReq = data.friendRequests.find(r => 
-      r.sender === toNickname && r.recver === fromNickname && r.status === 'pending'
-    );
-    
-    if (reverseReq) {
-      reverseReq.status = 'accepted';
-
-      data.friends.push({
+      data.friendRequests.push({
         id: Date.now(),
-        user1Id: fromUserId || '',
-        user1: fromNickname,
-        user1Avatar: fromAvatar || '🐱',
-        user1Level: fromLevel || 1,
-        user1Title: fromTitle || 'Noobslayer',
-        user1Exp: fromExp || 0,
-        user2Id: reverseReq.senderUserId || '',
-        user2: toNickname,
-        user2Avatar: reverseReq.senderAvatar,
-        user2Level: reverseReq.senderLevel,
-        user2Title: reverseReq.senderTitle,
-        user2Exp: reverseReq.senderExp,
+        sender: fromNickname,
+        senderUserId: fromUserId || '',
+        senderAvatar: fromAvatar || '🐱',
+        senderLevel: fromLevel || 1,
+        senderTitle: fromTitle || 'Noobslayer',
+        senderExp: fromExp || 0,
+        recver: toNickname,
+        status: 'pending',
         createdAt: new Date().toISOString()
       });
 
-      await saveData(data);
-      return res.json({ success: true, autoAccepted: true, message: '已自动成为好友' });
-    }
-
-    data.friendRequests.push({
-      id: Date.now(),
-      sender: fromNickname,
-      senderUserId: fromUserId || '',
-      senderAvatar: fromAvatar || '🐱',
-      senderLevel: fromLevel || 1,
-      senderTitle: fromTitle || 'Noobslayer',
-      senderExp: fromExp || 0,
-      recver: toNickname,
-      status: 'pending',
-      createdAt: new Date().toISOString()
+      result = { message: '好友请求已发送' };
     });
 
-    await saveData(data);
-    res.json({ success: true, message: '好友请求已发送' });
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json({ success: true, ...result });
   } catch (err) {
     console.error('Friend request error:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -627,40 +706,46 @@ app.post('/api/friends/respond', async (req, res) => {
   if (!requestId || !toNickname) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    const data = await loadData();
-    const request = data.friendRequests.find(r => r.id === requestId);
-    
-    if (!request) return res.status(404).json({ error: '请求不存在' });
-    if (request.recver !== toNickname) return res.status(403).json({ error: '无权操作' });
-    if (request.status !== 'pending') return res.status(400).json({ error: '请求已处理' });
+    let result = null;
 
-    if (accept) {
-      request.status = 'accepted';
+    await withWriteLock(data => {
+      const request = data.friendRequests.find(r => r.id === requestId);
 
-      data.friends.push({
-        id: Date.now(),
-        user1Id: request.senderUserId || '',
-        user1: request.sender,
-        user1Avatar: request.senderAvatar,
-        user1Level: request.senderLevel,
-        user1Title: request.senderTitle,
-        user1Exp: request.senderExp,
-        user2Id: toUserId || '',
-        user2: toNickname,
-        user2Avatar: toAvatar || '🐱',
-        user2Level: toLevel || 1,
-        user2Title: toTitle || 'Noobslayer',
-        user2Exp: toExp || 0,
-        createdAt: new Date().toISOString()
-      });
+      if (!request) { result = { error: '请求不存在', status: 404 }; return; }
+      if (request.recver !== toNickname) { result = { error: '无权操作', status: 403 }; return; }
+      if (request.status !== 'pending') { result = { error: '请求已处理', status: 400 }; return; }
 
-      await saveData(data);
-      res.json({ success: true, message: '已添加好友' });
-    } else {
-      request.status = 'rejected';
-      await saveData(data);
-      res.json({ success: true, message: '已拒绝好友请求' });
+      if (accept) {
+        request.status = 'accepted';
+
+        data.friends.push({
+          id: Date.now(),
+          user1Id: request.senderUserId || '',
+          user1: request.sender,
+          user1Avatar: request.senderAvatar,
+          user1Level: request.senderLevel,
+          user1Title: request.senderTitle,
+          user1Exp: request.senderExp,
+          user2Id: toUserId || '',
+          user2: toNickname,
+          user2Avatar: toAvatar || '🐱',
+          user2Level: toLevel || 1,
+          user2Title: toTitle || 'Noobslayer',
+          user2Exp: toExp || 0,
+          createdAt: new Date().toISOString()
+        });
+
+        result = { message: '已添加好友' };
+      } else {
+        request.status = 'rejected';
+        result = { message: '已拒绝好友请求' };
+      }
+    });
+
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
+    res.json({ success: true, ...result });
   } catch (err) {
     console.error('Friend respond error:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -686,21 +771,23 @@ app.get('/api/friends', async (req, res) => {
       const friendNickname = isUser1 ? f.user2 : f.user1;
       const friendUserId = isUser1 ? (f.user2Id || '') : (f.user1Id || '');
 
-      // 从 friends 表取基础数据
+      // 直接从 friends 表取数据（friends表由sync接口维护，数据更准确）
       let friendLevel = isUser1 ? f.user2Level : f.user1Level;
       let friendTitle = isUser1 ? f.user2Title : f.user1Title;
       let friendExp = isUser1 ? f.user2Exp : f.user1Exp;
       let friendAvatar = isUser1 ? f.user2Avatar : f.user1Avatar;
 
-      // 尝试从 users 表获取最新数据
-      const friendUser = data.users.find(u =>
-        (friendUserId && u.userId === friendUserId) || u.nickname === friendNickname
-      );
-      if (friendUser) {
-        friendLevel = friendUser.level || friendLevel;
-        friendTitle = friendUser.title || friendTitle;
-        friendExp = friendUser.exp !== undefined ? friendUser.exp : friendExp;
-        friendAvatar = friendUser.avatar || friendAvatar;
+      // 仅当friends表数据缺失时，才从users表补充
+      if ((!friendLevel && friendLevel !== 0) || friendLevel === undefined) {
+        const friendUser = data.users.find(u =>
+          (friendUserId && u.userId === friendUserId) || u.nickname === friendNickname
+        );
+        if (friendUser) {
+          friendLevel = friendUser.level || friendLevel;
+          friendTitle = friendUser.title || friendTitle;
+          friendExp = friendUser.exp !== undefined ? friendUser.exp : friendExp;
+          friendAvatar = friendUser.avatar || friendAvatar;
+        }
       }
 
       return {
@@ -726,27 +813,34 @@ app.delete('/api/friends', async (req, res) => {
   if ((!nickname && !userId) || !friendNickname) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    const data = await loadData();
-    const before = data.friends.length;
+    let result = null;
 
-    data.friends = data.friends.filter(f => {
-      if (userId) {
-        const mySide = f.user1Id === userId ? 'user1' : (f.user2Id === userId ? 'user2' : '');
-        if (!mySide) return true;
-        const otherNickname = mySide === 'user1' ? f.user2 : f.user1;
-        return otherNickname !== friendNickname;
+    await withWriteLock(data => {
+      const before = data.friends.length;
+
+      data.friends = data.friends.filter(f => {
+        if (userId) {
+          const mySide = f.user1Id === userId ? 'user1' : (f.user2Id === userId ? 'user2' : '');
+          if (!mySide) return true;
+          const otherNickname = mySide === 'user1' ? f.user2 : f.user1;
+          return otherNickname !== friendNickname;
+        } else {
+          return !((f.user1 === nickname && f.user2 === friendNickname) ||
+                   (f.user1 === friendNickname && f.user2 === nickname));
+        }
+      });
+
+      if (data.friends.length === before) {
+        result = { error: '好友关系不存在', status: 404 };
       } else {
-        return !((f.user1 === nickname && f.user2 === friendNickname) ||
-                 (f.user1 === friendNickname && f.user2 === nickname));
+        result = { deleted: true, message: '好友已删除' };
       }
     });
 
-    if (data.friends.length === before) {
-      return res.status(404).json({ error: '好友关系不存在' });
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
     }
-
-    await saveData(data);
-    res.json({ success: true, message: '好友已删除' });
+    res.json({ success: true, ...result });
   } catch (err) {
     console.error('Delete friend error:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -762,11 +856,11 @@ app.post('/api/friends/pk', async (req, res) => {
   if (!myNickname || !friendNickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
+    // PK 只读+追加，用 loadData 即可
     const data = await loadData();
 
     // 好友匹配：同时支持 nickname 和 userId
     const isFriend = data.friends.some(f => {
-      // 通过 userId 匹配
       if (myUserId) {
         const mySide = f.user1Id === myUserId ? 'user1' : (f.user2Id === myUserId ? 'user2' : '');
         if (mySide) {
@@ -774,7 +868,6 @@ app.post('/api/friends/pk', async (req, res) => {
           return otherNickname === friendNickname;
         }
       }
-      // 通过 nickname 匹配
       return (f.user1 === myNickname && f.user2 === friendNickname) ||
              (f.user1 === friendNickname && f.user2 === myNickname);
     });
@@ -799,18 +892,19 @@ app.post('/api/friends/pk', async (req, res) => {
       comment = getPkComment(myLevel, friendLevel, false);
     }
 
-    data.pkRecords.push({
-      id: Date.now(),
-      challenger: myNickname,
-      challengerLevel: myLevel,
-      defender: friendNickname,
-      defenderLevel: friendLevel,
-      result: result,
-      comment: comment,
-      createdAt: new Date().toISOString()
+    // 用写入锁保存PK记录
+    await withWriteLock(d => {
+      d.pkRecords.push({
+        id: Date.now(),
+        challenger: myNickname,
+        challengerLevel: myLevel,
+        defender: friendNickname,
+        defenderLevel: friendLevel,
+        result: result,
+        comment: comment,
+        createdAt: new Date().toISOString()
+      });
     });
-
-    await saveData(data);
 
     res.json({
       success: true,
