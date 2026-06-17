@@ -35,7 +35,24 @@
       "createdAt": "2026-06-17T00:34:35.429Z"
     }
   ],
-  "friends": [],
+  "friends": [
+    {
+      "id": 1781656538646,
+      "user1Id": "u_1781631383256_tff92l",
+      "user1": "Kizzie",
+      "user1Avatar": "🐬",
+      "user1Level": 3,
+      "user1Title": "Grammar Bandit",
+      "user1Exp": 84,
+      "user2Id": "u_1781646780240_ei18wk",
+      "user2": "MIA",
+      "user2Avatar": "👻",
+      "user2Level": 1,
+      "user2Title": "Noobslayer",
+      "user2Exp": 9,
+      "createdAt": "2026-06-17T00:35:38.646Z"
+    }
+  ],
   "friendRequests": [
     {
       "id": 1781656483216,
@@ -46,7 +63,7 @@
       "senderTitle": "Grammar Bandit",
       "senderExp": 84,
       "recver": "MIA",
-      "status": "pending",
+      "status": "accepted",
       "createdAt": "2026-06-17T00:34:43.216Z"
     }
   ],
