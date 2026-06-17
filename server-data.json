@@ -51,6 +51,22 @@
       "user2Title": "Noobslayer",
       "user2Exp": 9,
       "createdAt": "2026-06-17T00:35:38.646Z"
+    },
+    {
+      "id": 1781656585110,
+      "user1Id": "u_1781646227127_raod99",
+      "user1": "KIKIi",
+      "user1Avatar": "🧬",
+      "user1Level": 1,
+      "user1Title": "Noobslayer",
+      "user1Exp": 0,
+      "user2Id": "u_1781646780240_ei18wk",
+      "user2": "MIA",
+      "user2Avatar": "👻",
+      "user2Level": 1,
+      "user2Title": "Noobslayer",
+      "user2Exp": 9,
+      "createdAt": "2026-06-17T00:36:25.110Z"
     }
   ],
   "friendRequests": [
@@ -75,7 +91,7 @@
       "senderTitle": "Noobslayer",
       "senderExp": 0,
       "recver": "MIA",
-      "status": "pending",
+      "status": "accepted",
       "createdAt": "2026-06-17T00:36:13.486Z"
     }
   ],
