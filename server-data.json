@@ -164,6 +164,22 @@
       "user2Title": "Grammar Bandit",
       "user2Exp": 95,
       "createdAt": "2026-06-17T08:22:41.614Z"
+    },
+    {
+      "id": 1781686960846,
+      "user1Id": "u_1781672085220_uefx19",
+      "user1": "1",
+      "user1Avatar": "👽",
+      "user1Level": 1,
+      "user1Title": "Noobslayer",
+      "user1Exp": 3,
+      "user2Id": "u_1781631383256_tff92l",
+      "user2": "Kizzie",
+      "user2Avatar": "🤓",
+      "user2Level": 4,
+      "user2Title": "Fluffy Linguist",
+      "user2Exp": 108,
+      "createdAt": "2026-06-17T09:02:40.846Z"
     }
   ],
   "friendRequests": [
@@ -236,7 +252,7 @@
       "senderTitle": "Noobslayer",
       "senderExp": 3,
       "recver": "Kizzie",
-      "status": "pending",
+      "status": "accepted",
       "createdAt": "2026-06-17T09:01:00.637Z"
     }
   ],
