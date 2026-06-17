@@ -906,6 +906,16 @@
       "result": "win",
       "comment": "赢了！但对手表示不服要二番战 🥊",
       "createdAt": "2026-06-17T11:12:37.084Z"
+    },
+    {
+      "id": 1781694819961,
+      "challenger": "Kizzie",
+      "challengerLevel": 5,
+      "defender": "温康",
+      "defenderLevel": 1,
+      "result": "win",
+      "comment": "差一点就翻车了！还好没翻 🚗",
+      "createdAt": "2026-06-17T11:13:39.961Z"
     }
   ]
 }
