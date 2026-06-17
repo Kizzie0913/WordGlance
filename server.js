@@ -286,12 +286,20 @@ app.post('/api/users/register', async (req, res) => {
 });
 
 app.get('/api/users/profile', async (req, res) => {
-  const { userId } = req.query;
-  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+  const { userId, nickname } = req.query;
+  if (!userId && !nickname) return res.status(400).json({ error: 'userId或nickname不能为空' });
 
   try {
     const data = await loadData();
-    const user = data.users.find(u => u.userId === userId);
+    let user = null;
+    
+    if (userId) {
+      user = data.users.find(u => u.userId === userId);
+    }
+    if (!user && nickname) {
+      user = data.users.find(u => u.nickname === nickname);
+    }
+    
     if (!user) return res.status(404).json({ error: '用户不存在' });
     res.json({ user });
   } catch (err) {
