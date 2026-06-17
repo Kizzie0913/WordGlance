@@ -647,6 +647,16 @@
       "result": "lose",
       "comment": "惜败！但败了就是败了 😢 没开玩笑",
       "createdAt": "2026-06-17T10:32:55.594Z"
+    },
+    {
+      "id": 1781692390688,
+      "challenger": "Kizzie",
+      "challengerLevel": 5,
+      "defender": "oooo",
+      "defenderLevel": 1,
+      "result": "win",
+      "comment": "险胜！但胜了就是胜了 💪😎",
+      "createdAt": "2026-06-17T10:33:10.688Z"
     }
   ]
 }
