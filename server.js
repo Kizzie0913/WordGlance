@@ -1,4 +1,4 @@
-// server.js - WordGlance 后端（GitHub Gist 数据存储版本）
+// server.js - WordGlance 后端（GitHub 永久存储版）
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -8,79 +8,148 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// GitHub Gist 配置（用于存储 data.json）
-const GIST_ID = 'YOUR_GIST_ID'; // 需要创建一个 Gist
+// GitHub 配置（Token 通过环境变量 GITHUB_TOKEN 传入，不在代码中写死）
+const GITHUB_REPO = 'Kizzie0913/WordGlance';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const DATA_FILE_PATH = 'server-data.json';
 
 const DATA_FILE = path.join(__dirname, 'data.json');
+const BACKUP_FILE = path.join(__dirname, 'data.backup.json');
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 加载数据（优先从 GitHub Gist 加载，失败则从本地文件加载）
-async function loadData() {
+// 从 GitHub 加载数据
+async function loadDataFromGitHub() {
+  if (!GITHUB_TOKEN) {
+    console.log('未配置 GITHUB_TOKEN，使用本地文件');
+    return loadFromLocal();
+  }
+
   try {
-    if (GITHUB_TOKEN && GIST_ID !== 'YOUR_GIST_ID') {
-      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'User-Agent': 'WordGlance'
-        }
-      });
-      if (response.ok) {
-        const gist = await response.json();
-        if (gist.files && gist.files['data.json']) {
-          const content = gist.files['data.json'].content;
-          fs.writeFileSync(DATA_FILE, content, 'utf8');
-          return JSON.parse(content);
-        }
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${DATA_FILE_PATH}`, {
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'WordGlance',
+        'Accept': 'application/vnd.github.v3+json'
       }
+    });
+    
+    if (response.ok) {
+      const file = await response.json();
+      const content = Buffer.from(file.content, 'base64').toString('utf8');
+      const data = JSON.parse(content);
+      
+      fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2), 'utf8');
+      fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+      
+      console.log('从 GitHub 加载数据成功');
+      return { data, sha: file.sha };
+    } else if (response.status === 404) {
+      console.log('server-data.json 不存在，创建新的...');
+      const initialData = { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [] };
+      const sha = await saveDataToGitHub(initialData, null);
+      return { data: initialData, sha };
+    } else {
+      console.error('GitHub API 错误:', response.status);
+      return loadFromLocal();
     }
   } catch (err) {
-    console.error('从 Gist 加载失败，使用本地文件:', err.message);
+    console.error('从 GitHub 加载失败:', err.message);
+    return loadFromLocal();
   }
-
-  // 从本地文件加载
-  if (!fs.existsSync(DATA_FILE)) {
-    return { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [] };
-  }
-  const raw = fs.readFileSync(DATA_FILE, 'utf8');
-  return JSON.parse(raw || '{"users":[],"messages":[],"friends":[],"friendRequests":[],"pkRecords":[]}');
 }
 
-// 保存数据（同时保存到本地和 GitHub Gist）
-async function saveData(data) {
-  const json = JSON.stringify(data, null, 2);
-  fs.writeFileSync(DATA_FILE, json, 'utf8');
-
-  // 同步到 GitHub Gist
-  if (GITHUB_TOKEN && GIST_ID !== 'YOUR_GIST_ID') {
-    try {
-      await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `token ${GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-          'User-Agent': 'WordGlance'
-        },
-        body: JSON.stringify({
-          files: {
-            'data.json': {
-              content: json
-            }
-          }
-        })
-      });
-    } catch (err) {
-      console.error('同步到 Gist 失败:', err.message);
-    }
+function loadFromLocal() {
+  if (fs.existsSync(BACKUP_FILE)) {
+    const raw = fs.readFileSync(BACKUP_FILE, 'utf8');
+    console.log('从本地备份加载数据');
+    return { data: JSON.parse(raw), sha: null };
   }
+  console.log('使用空数据');
+  return { data: { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [] }, sha: null };
+}
+
+// 保存数据到 GitHub
+async function saveDataToGitHub(data, sha = null) {
+  if (!GITHUB_TOKEN) {
+    console.log('未配置 GITHUB_TOKEN，只保存到本地');
+    const content = JSON.stringify(data, null, 2);
+    fs.writeFileSync(BACKUP_FILE, content, 'utf8');
+    fs.writeFileSync(DATA_FILE, content, 'utf8');
+    return sha;
+  }
+
+  try {
+    const content = JSON.stringify(data, null, 2);
+    const body = {
+      message: '更新数据 ' + new Date().toISOString(),
+      content: Buffer.from(content).toString('base64')
+    };
+    
+    if (sha) {
+      body.sha = sha;
+    }
+    
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${DATA_FILE_PATH}`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${GITHUB_TOKEN}`,
+        'User-Agent': 'WordGlance',
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      fs.writeFileSync(BACKUP_FILE, content, 'utf8');
+      fs.writeFileSync(DATA_FILE, content, 'utf8');
+      console.log('数据已保存到 GitHub');
+      return result.content.sha;
+    } else {
+      const errText = await response.text();
+      console.error('保存到 GitHub 失败:', errText);
+      fs.writeFileSync(BACKUP_FILE, content, 'utf8');
+      return sha;
+    }
+  } catch (err) {
+    console.error('保存到 GitHub 失败:', err.message);
+    const content = JSON.stringify(data, null, 2);
+    fs.writeFileSync(BACKUP_FILE, content, 'utf8');
+    return sha;
+  }
+}
+
+// 内存缓存
+let dataCache = null;
+let dataSha = null;
+let lastLoadTime = 0;
+const CACHE_TTL = 3000;
+
+async function loadData() {
+  const now = Date.now();
+  if (dataCache && (now - lastLoadTime) < CACHE_TTL) {
+    return dataCache;
+  }
+  
+  const result = await loadDataFromGitHub();
+  dataCache = result.data;
+  dataSha = result.sha;
+  lastLoadTime = now;
+  return dataCache;
+}
+
+async function saveData(data) {
+  dataCache = data;
+  lastLoadTime = Date.now();
+  dataSha = await saveDataToGitHub(data, dataSha);
 }
 
 // ========== 用户资料 API ==========
 
-// 注册/更新用户资料
 app.post('/api/users/register', async (req, res) => {
   const { userId, nickname, avatar } = req.body;
   if (!userId || !nickname) return res.status(400).json({ error: '参数不完整' });
@@ -88,9 +157,8 @@ app.post('/api/users/register', async (req, res) => {
   const trimmedName = nickname.trim();
   
   try {
-    const data = loadData();
+    const data = await loadData();
 
-    // 检查昵称是否已被其他用户使用
     const existingUser = data.users.find(u => u.nickname === trimmedName && u.userId !== userId);
     if (existingUser) {
       return res.status(409).json({ error: '该昵称已被使用，请换一个独特的昵称' });
@@ -100,12 +168,10 @@ app.post('/api/users/register', async (req, res) => {
     const oldNickname = user ? user.nickname : null;
 
     if (user) {
-      // 老用户：更新昵称和头像
       user.nickname = trimmedName;
       if (avatar) user.avatar = avatar;
       user.lastLogin = new Date().toISOString();
 
-      // 同步更新所有旧留言中的昵称和头像
       data.messages.forEach(msg => {
         if (msg.userId === userId) {
           msg.nickname = trimmedName;
@@ -113,7 +179,6 @@ app.post('/api/users/register', async (req, res) => {
         }
       });
 
-      // 同步更新好友关系中的信息（兼容旧数据：同时用userId和旧昵称匹配）
       data.friends.forEach(f => {
         if (f.user1Id === userId) {
           f.user1 = trimmedName;
@@ -133,10 +198,9 @@ app.post('/api/users/register', async (req, res) => {
         }
       });
 
-      saveData(data);
+      await saveData(data);
       return res.json({ success: true, user, isNew: false });
     } else {
-      // 新用户
       const newUser = {
         userId: userId,
         nickname: trimmedName,
@@ -148,7 +212,7 @@ app.post('/api/users/register', async (req, res) => {
         lastLogin: new Date().toISOString()
       };
       data.users.push(newUser);
-      saveData(data);
+      await saveData(data);
       return res.json({ success: true, user: newUser, isNew: true });
     }
   } catch (err) {
@@ -157,13 +221,12 @@ app.post('/api/users/register', async (req, res) => {
   }
 });
 
-// 获取用户资料
-app.get('/api/users/profile', (req, res) => {
+app.get('/api/users/profile', async (req, res) => {
   const { userId } = req.query;
   if (!userId) return res.status(400).json({ error: 'userId不能为空' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const user = data.users.find(u => u.userId === userId);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     res.json({ user });
@@ -175,13 +238,13 @@ app.get('/api/users/profile', (req, res) => {
 
 // ========== 留言板 API ==========
 
-app.get('/api/messages', (req, res) => {
+app.get('/api/messages', async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 20;
   const userId = req.query.userId || '';
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const start = (page - 1) * limit;
     const end = start + limit;
     const messages = data.messages.slice(-end).reverse().slice(0, limit);
@@ -206,13 +269,13 @@ app.get('/api/messages', (req, res) => {
   }
 });
 
-app.post('/api/messages', (req, res) => {
+app.post('/api/messages', async (req, res) => {
   const { nickname, avatar, content, userId } = req.body;
   if (!content || !content.trim()) return res.status(400).json({ error: '留言内容不能为空' });
   if (!nickname || !nickname.trim()) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const newMessage = {
       id: Date.now(),
       userId: userId || '',
@@ -225,7 +288,7 @@ app.post('/api/messages', (req, res) => {
       createdAt: new Date().toISOString()
     };
     data.messages.push(newMessage);
-    saveData(data);
+    await saveData(data);
 
     res.json({
       success: true,
@@ -240,13 +303,12 @@ app.post('/api/messages', (req, res) => {
   }
 });
 
-// 点赞/取消点赞
-app.post('/api/messages/:id/like', (req, res) => {
+app.post('/api/messages/:id/like', async (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId不能为空' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const messageId = parseInt(req.params.id);
     const msg = data.messages.find(m => m.id === messageId);
     
@@ -259,13 +321,13 @@ app.post('/api/messages/:id/like', (req, res) => {
       likedUsers.push(userId);
       msg.likedUsers = likedUsers;
       msg.likes = likedUsers.length;
-      saveData(data);
+      await saveData(data);
       res.json({ success: true, liked: true, likes: likedUsers.length });
     } else {
       likedUsers.splice(userIndex, 1);
       msg.likedUsers = likedUsers;
       msg.likes = likedUsers.length;
-      saveData(data);
+      await saveData(data);
       res.json({ success: true, liked: false, likes: likedUsers.length });
     }
   } catch (err) {
@@ -276,20 +338,17 @@ app.post('/api/messages/:id/like', (req, res) => {
 
 // ========== 好友系统 API ==========
 
-// 发送好友请求
-app.post('/api/friends/request', (req, res) => {
+app.post('/api/friends/request', async (req, res) => {
   const { fromNickname, fromAvatar, fromLevel, fromTitle, fromExp, toNickname, fromUserId } = req.body;
   if (!fromNickname || !toNickname) return res.status(400).json({ error: '昵称不能为空' });
   if (fromNickname === toNickname) return res.status(400).json({ error: '不能添加自己为好友' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
 
-    // 查找对方的 userId
     const toUser = data.users.find(u => u.nickname === toNickname);
     const toUserId = toUser ? toUser.userId : '';
 
-    // 检查是否已经是好友（优先用userId匹配）
     const isFriend = data.friends.some(f => {
       if (f.user1Id && f.user2Id && fromUserId && toUserId) {
         return (f.user1Id === fromUserId && f.user2Id === toUserId) ||
@@ -301,7 +360,6 @@ app.post('/api/friends/request', (req, res) => {
 
     if (isFriend) return res.status(400).json({ error: '你们已经是好友了' });
 
-    // 检查是否已有待处理的请求
     const existingReq = data.friendRequests.find(r => 
       r.sender === fromNickname && r.recver === toNickname && r.status === 'pending'
     );
@@ -309,7 +367,6 @@ app.post('/api/friends/request', (req, res) => {
       return res.status(400).json({ error: '已发送过好友请求，等待对方确认' });
     }
 
-    // 检查对方是否已向你发送请求（自动接受）
     const reverseReq = data.friendRequests.find(r => 
       r.sender === toNickname && r.recver === fromNickname && r.status === 'pending'
     );
@@ -334,11 +391,10 @@ app.post('/api/friends/request', (req, res) => {
         createdAt: new Date().toISOString()
       });
 
-      saveData(data);
+      await saveData(data);
       return res.json({ success: true, autoAccepted: true, message: '已自动成为好友' });
     }
 
-    // 创建新的好友请求
     data.friendRequests.push({
       id: Date.now(),
       sender: fromNickname,
@@ -352,7 +408,7 @@ app.post('/api/friends/request', (req, res) => {
       createdAt: new Date().toISOString()
     });
 
-    saveData(data);
+    await saveData(data);
     res.json({ success: true, message: '好友请求已发送' });
   } catch (err) {
     console.error('Friend request error:', err);
@@ -360,13 +416,12 @@ app.post('/api/friends/request', (req, res) => {
   }
 });
 
-// 获取收到的好友请求
-app.get('/api/friends/requests', (req, res) => {
+app.get('/api/friends/requests', async (req, res) => {
   const { nickname } = req.query;
   if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const requests = data.friendRequests.filter(r => 
       r.recver === nickname && r.status === 'pending'
     );
@@ -377,13 +432,12 @@ app.get('/api/friends/requests', (req, res) => {
   }
 });
 
-// 接受/拒绝好友请求
-app.post('/api/friends/respond', (req, res) => {
+app.post('/api/friends/respond', async (req, res) => {
   const { requestId, accept, toNickname, toAvatar, toLevel, toTitle, toExp, toUserId } = req.body;
   if (!requestId || !toNickname) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const request = data.friendRequests.find(r => r.id === requestId);
     
     if (!request) return res.status(404).json({ error: '请求不存在' });
@@ -410,11 +464,11 @@ app.post('/api/friends/respond', (req, res) => {
         createdAt: new Date().toISOString()
       });
 
-      saveData(data);
+      await saveData(data);
       res.json({ success: true, message: '已添加好友' });
     } else {
       request.status = 'rejected';
-      saveData(data);
+      await saveData(data);
       res.json({ success: true, message: '已拒绝好友请求' });
     }
   } catch (err) {
@@ -423,13 +477,12 @@ app.post('/api/friends/respond', (req, res) => {
   }
 });
 
-// 获取好友列表
-app.get('/api/friends', (req, res) => {
+app.get('/api/friends', async (req, res) => {
   const { nickname, userId } = req.query;
   if (!nickname && !userId) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     let friendsData = data.friends;
 
     const friends = friendsData.filter(f => {
@@ -458,13 +511,12 @@ app.get('/api/friends', (req, res) => {
   }
 });
 
-// 删除好友
-app.delete('/api/friends', (req, res) => {
+app.delete('/api/friends', async (req, res) => {
   const { nickname, friendNickname, userId } = req.body;
   if ((!nickname && !userId) || !friendNickname) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const before = data.friends.length;
 
     data.friends = data.friends.filter(f => {
@@ -483,7 +535,7 @@ app.delete('/api/friends', (req, res) => {
       return res.status(404).json({ error: '好友关系不存在' });
     }
 
-    saveData(data);
+    await saveData(data);
     res.json({ success: true, message: '好友已删除' });
   } catch (err) {
     console.error('Delete friend error:', err);
@@ -493,16 +545,15 @@ app.delete('/api/friends', (req, res) => {
 
 // ========== PK 功能 ==========
 
-app.post('/api/friends/pk', (req, res) => {
+app.post('/api/friends/pk', async (req, res) => {
   const { myNickname, myLevel, myTitle, myExp, myAvatar,
           friendNickname, friendLevel, friendTitle, friendExp, friendAvatar } = req.body;
 
   if (!myNickname || !friendNickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
 
-    // 检查是否好友
     const isFriend = data.friends.some(f =>
       (f.user1 === myNickname && f.user2 === friendNickname) ||
       (f.user1 === friendNickname && f.user2 === myNickname)
@@ -510,7 +561,6 @@ app.post('/api/friends/pk', (req, res) => {
 
     if (!isFriend) return res.status(400).json({ error: '你们不是好友，不能PK' });
 
-    // 计算战力
     const myPower = myLevel * 100 + myExp + Math.floor(Math.random() * 200);
     const friendPower = friendLevel * 100 + friendExp + Math.floor(Math.random() * 200);
 
@@ -529,7 +579,6 @@ app.post('/api/friends/pk', (req, res) => {
       comment = getPkComment(myLevel, friendLevel, false);
     }
 
-    // 保存 PK 记录
     data.pkRecords.push({
       id: Date.now(),
       challenger: myNickname,
@@ -541,7 +590,7 @@ app.post('/api/friends/pk', (req, res) => {
       createdAt: new Date().toISOString()
     });
 
-    saveData(data);
+    await saveData(data);
 
     res.json({
       success: true,
@@ -560,13 +609,12 @@ app.post('/api/friends/pk', (req, res) => {
   }
 });
 
-// 获取 PK 记录
-app.get('/api/friends/pk/history', (req, res) => {
+app.get('/api/friends/pk/history', async (req, res) => {
   const { nickname } = req.query;
   if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const data = loadData();
+    const data = await loadData();
     const records = data.pkRecords.filter(r => 
       r.challenger === nickname || r.defender === nickname
     ).slice(-20).reverse();
@@ -578,10 +626,8 @@ app.get('/api/friends/pk/history', (req, res) => {
   }
 });
 
-// PK 评语生成函数
 function getPkComment(myLevel, friendLevel, iWin) {
-  const diff = Math.abs(myLevel - friendLevel);
-  
+  const diff = Math.abs(myLevel - friendLevel);  
   if (diff === 0) {
     const comments = [
       '旗鼓相当！下次再战！⚔️',
@@ -591,8 +637,7 @@ function getPkComment(myLevel, friendLevel, iWin) {
     return comments[Math.floor(Math.random() * comments.length)];
   }
 
-  const isBig = diff >= 5;
-  
+  const isBig = diff >= 5;  
   if (iWin) {
     if (isBig) {
       const winComments = [
