@@ -136,6 +136,18 @@
       "recver": "MIA",
       "status": "accepted",
       "createdAt": "2026-06-17T00:59:07.784Z"
+    },
+    {
+      "id": 1781661569728,
+      "sender": "星倦",
+      "senderUserId": "u_1781661535543_6p3coi",
+      "senderAvatar": "🧬",
+      "senderLevel": 1,
+      "senderTitle": "Noobslayer",
+      "senderExp": 0,
+      "recver": "Kizzie",
+      "status": "pending",
+      "createdAt": "2026-06-17T01:59:29.728Z"
     }
   ],
   "pkRecords": [
