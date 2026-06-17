@@ -48,7 +48,8 @@
       "title": "Noobslayer",
       "exp": 0,
       "createdAt": "2026-06-17T09:13:09.465Z",
-      "lastLogin": "2026-06-17T09:13:09.465Z"
+      "lastLogin": "2026-06-17T09:13:09.465Z",
+      "lastSync": "2026-06-17T09:22:29.129Z"
     }
   ],
   "messages": [
@@ -102,7 +103,7 @@
       "id": 1781656585110,
       "user1Id": "u_1781646227127_raod99",
       "user1": "KIKIi",
-      "user1Avatar": "🧬",
+      "user1Avatar": "🐢",
       "user1Level": 1,
       "user1Title": "Noobslayer",
       "user1Exp": 0,
