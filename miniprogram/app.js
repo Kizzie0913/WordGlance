@@ -97,8 +97,10 @@ App({
           storage.saveLoginUser(userInfo)
           that.globalData.userInfo = userInfo
 
-          // 跳转到首页
-          wx.switchTab({ url: '/pages/index/index' })
+          // 先从服务器恢复数据，再跳转
+          that.restoreDataFromServer(user.userId, function() {
+            wx.switchTab({ url: '/pages/index/index' })
+          })
         } else {
           // 未找到绑定的账号，使用本地存储
           var localUser = storage.getLoginUser()
@@ -119,5 +121,71 @@ App({
 
   globalData: {
     userInfo: null
+  }),
+
+  // 同步本地数据到服务器（退出前台时调用）
+  syncDataToServer: function (callback) {
+    var userInfo = getApp().globalData.userInfo
+    if (!userInfo || !userInfo.userId || userInfo.isGuest) {
+      if (callback) callback()
+      return
+    }
+
+    var exp = storage.getExp()
+    var vocabulary = storage.getVocabList()
+    var corpus = storage.getCorpusList()
+
+    wx.request({
+      url: API_BASE + '/api/users/sync-data',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: {
+        userId: userInfo.userId,
+        exp: exp,
+        vocabulary: vocabulary,
+        corpus: corpus
+      },
+      timeout: 8000,
+      success: function () {
+        if (callback) callback()
+      },
+      fail: function () {
+        if (callback) callback()
+      }
+    })
+  },
+
+  // 从服务器恢复数据到本地（登录时调用）
+  restoreDataFromServer: function (userId, callback) {
+    wx.request({
+      url: API_BASE + '/api/users/sync-data?userId=' + encodeURIComponent(userId),
+      method: 'GET',
+      timeout: 8000,
+      success: function (res) {
+        if (res.data) {
+          // 恢复经验值
+          if (res.data.exp !== undefined) {
+            storage.setExp(res.data.exp)
+          }
+          // 恢复生词库
+          if (res.data.vocabulary && res.data.vocabulary.length > 0) {
+            try { wx.setStorageSync('vocab_list', res.data.vocabulary) } catch (e) {}
+          }
+          // 恢复语料库
+          if (res.data.corpus && res.data.corpus.length > 0) {
+            try { wx.setStorageSync('corpus_list', res.data.corpus) } catch (e) {}
+          }
+        }
+        if (callback) callback()
+      },
+      fail: function () {
+        if (callback) callback()
+      }
+    })
+  },
+
+  onHide: function () {
+    // 退到后台时自动同步
+    getApp().syncDataToServer()
   }
 })

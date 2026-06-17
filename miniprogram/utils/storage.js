@@ -190,13 +190,15 @@ function hasUserId() {
 // 保存登录信息
 function saveLoginUser(userInfo) {
   try {
-    // 自动附加userId
+    // 自动附加userId（从持久化读取，确保不变）
     if (!userInfo.userId) {
       userInfo.userId = getUserId()
     }
     // 同时保存到主key和备份key
     wx.setStorageSync(KEYS.LOGIN, userInfo)
     wx.setStorageSync(KEYS.LOGIN + '_backup', userInfo)
+    // 关键：把 userId 固化到 persistent_user_id（防止清缓存后丢失）
+    wx.setStorageSync(KEYS.USER_ID, userInfo.userId)
     return true
   } catch (e) {
     return false

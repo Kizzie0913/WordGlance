@@ -344,10 +344,14 @@ Page({
       storage.setExp(0)
     }
 
-    wx.showToast({ title: '登录成功', icon: 'success' })
-    setTimeout(function () {
-      wx.switchTab({ url: '/pages/index/index' })
-    }, 1200)
+    // 从服务器恢复数据（生词库、语料库、经验值）
+    var that = this
+    getApp().restoreDataFromServer(userId, function() {
+      wx.showToast({ title: '登录成功', icon: 'success' })
+      setTimeout(function () {
+        wx.switchTab({ url: '/pages/index/index' })
+      }, 1200)
+    })
   },
 
   // 绑定微信账号

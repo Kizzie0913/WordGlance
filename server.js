@@ -1513,6 +1513,80 @@ app.get('/api/tools/scene-list', async (req, res) => {
   });
 });
 
+// ========== 用户数据云端同步 API ==========
+
+// 保存用户数据到服务器（生词库、语料库、经验值、好友）
+app.post('/api/users/sync-data', async (req, res) => {
+  const { userId, exp, vocabulary, corpus, friends } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    let result = null;
+    await withWriteLock(data => {
+      const user = data.users.find(u => u.userId === userId);
+      if (!user) {
+        result = { error: '用户不存在', status: 404 };
+        return;
+      }
+
+      // 更新用户数据（只更新有变化的字段）
+      if (exp !== undefined) user.exp = exp;
+      if (vocabulary !== undefined) user.vocabulary = vocabulary;
+      if (corpus !== undefined) user.corpus = corpus;
+      if (friends !== undefined) user.friendsData = friends;
+
+      // 同时更新等级
+      if (exp !== undefined) {
+        const LEVEL_TITLES = ['Noobslayer','Word Warrior','Vocab Master','Sentence Slayer','Grammar Guardian','Fluency Knight','Debate Lord','Polyglot','Shadowing King','WordGlance Legend'];
+        const newLevel = Math.floor(exp / 100) + 1;
+        const newTitle = LEVEL_TITLES[Math.min(newLevel - 1, LEVEL_TITLES.length - 1)] || 'WordGlance Legend';
+        if (user.level !== newLevel || user.title !== newTitle) {
+          user.level = newLevel;
+          user.title = newTitle;
+        }
+      }
+
+      result = { success: true, user: { exp: user.exp, level: user.level, title: user.title } };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Sync data error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 从服务器获取用户数据
+app.get('/api/users/sync-data', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    const data = await loadData();
+    const user = data.users.find(u => u.userId === userId);
+
+    if (!user) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    res.json({
+      exp: user.exp || 0,
+      level: user.level || 1,
+      title: user.title || 'Noobslayer',
+      vocabulary: user.vocabulary || [],
+      corpus: user.corpus || [],
+      friendsData: user.friendsData || []
+    });
+  } catch (err) {
+    console.error('Get sync data error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`WordGlance 后端运行在端口 ${PORT}`);
 });
