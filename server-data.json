@@ -216,6 +216,16 @@
       "result": "win",
       "comment": "轻松取胜！💪",
       "createdAt": "2026-06-17T08:14:08.817Z"
+    },
+    {
+      "id": 1781684255078,
+      "challenger": "Kizzie",
+      "challengerLevel": 3,
+      "defender": "星倦",
+      "defenderLevel": 1,
+      "result": "win",
+      "comment": "实力获胜！👍",
+      "createdAt": "2026-06-17T08:17:35.078Z"
     }
   ]
 }
