@@ -1206,11 +1206,21 @@ app.post('/api/messages/:id/reply', async (req, res) => {
 
   try {
     const messageId = parseInt(req.params.id);
+    console.log('[Reply] 开始处理回复:', { messageId, userId, nickname, content });
+
     let result = null;
+    let error = null;
 
     await withWriteLock(data => {
+      console.log('[Reply] 数据已加载, 消息总数:', data.messages.length);
       const msg = data.messages.find(m => m.id === messageId);
-      if (!msg) { result = { error: '留言不存在', status: 404 }; return; }
+      if (!msg) { 
+        console.log('[Reply] 留言不存在, messageId:', messageId);
+        error = { error: '留言不存在', status: 404 }; 
+        return; 
+      }
+
+      console.log('[Reply] 找到留言:', { id: msg.id, nickname: msg.nickname });
 
       if (!msg.replies) msg.replies = [];
 
@@ -1220,20 +1230,23 @@ app.post('/api/messages/:id/reply', async (req, res) => {
         nickname: nickname || '',
         avatar: avatar || '🐱',
         content,
-        mentionUsers: mentionUsers || [], // @的好友列表
+        mentionUsers: mentionUsers || [],
         createdAt: new Date().toISOString()
       };
 
       msg.replies.push(reply);
       result = { reply };
+      console.log('[Reply] 回复已添加, 回复总数:', msg.replies.length);
     });
 
-    if (result && result.error) {
-      return res.status(result.status).json({ error: result.error });
+    if (error) {
+      console.log('[Reply] 返回错误:', error.error);
+      return res.status(error.status).json({ error: error.error });
     }
+    console.log('[Reply] 回复成功');
     res.json({ success: true, reply: result.reply });
   } catch (err) {
-    console.error('Reply error:', err);
+    console.error('[Reply] 服务器错误:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
