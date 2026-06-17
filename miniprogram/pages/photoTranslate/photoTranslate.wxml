@@ -1,0 +1,186 @@
+<!--pages/photoTranslate/photoTranslate.wxml-->
+<!--页面1：拍照识图翻译 - 纯文字展示（无框选）-->
+<view class="page-container">
+
+  <!--波点装饰-->
+  <view class="dots-bg">
+    <view class="dot" style="width:90rpx;height:90rpx;background:#07c160;top:30rpx;right:40rpx;"></view>
+    <view class="dot" style="width:60rpx;height:60rpx;background:#ff9500;top:180rpx;left:30rpx;"></view>
+    <view class="dot" style="width:70rpx;height:70rpx;background:#5ac8fa;bottom:100rpx;right:80rpx;"></view>
+  </view>
+
+  <!--拍照技巧提示-->
+  <view class="tip-bar" wx:if="{{!imageUrl}}">
+    <text class="tip-text">💡 拍照技巧：物体占满画面、光线充足、正面拍摄，识别更准</text>
+  </view>
+
+  <!--拍照/上传区域-->
+  <view class="card photo-area" wx:if="{{!imageUrl}}">
+    <view class="photo-placeholder" bindtap="chooseImage">
+      <text class="photo-icon">📷</text>
+      <text class="photo-text">点击拍照或上传图片</text>
+      <text class="photo-hint">支持拍摄或从相册选择</text>
+    </view>
+  </view>
+
+  <!--图片预览 + 识别结果-->
+  <view wx:if="{{imageUrl}}">
+    <!--图片预览-->
+    <view class="card preview-card">
+      <image class="preview-img" src="{{imageUrl}}" mode="aspectFit"></image>
+      <view class="preview-actions">
+        <view class="action-btn" bindtap="chooseImage">
+          <text>🔄 重新选择</text>
+        </view>
+        <view class="action-btn" bindtap="clearImage">
+          <text>🗑️ 清除</text>
+        </view>
+      </view>
+    </view>
+
+    <!--识别结果-->
+    <view class="card result-card">
+      <view class="result-header">
+        <text class="result-title">🎯 识别结果</text>
+        <text class="tag tag-green">共 {{resultWords.length}} 词</text>
+      </view>
+      <view class="divider"></view>
+
+      <!--单词列表：点击进入词典详情，不直接播放发音-->
+      <view class="word-item" wx:for="{{resultWords}}" wx:key="english" bindtap="showWordDetail" data-idx="{{index}}">
+        <view class="word-num">
+          <text>{{index+1}}</text>
+        </view>
+        <view class="word-main">
+          <text class="word-en">{{item.english}}</text>
+          <text class="word-chinese-brief">{{item.chinese}}</text>
+        </view>
+        <view class="word-actions" catchtap="preventBubble">
+          <view class="word-action-btn" catchtap="toggleCollect" data-idx="{{index}}">
+            <text>{{item.collected ? '❤️' : '🤍'}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="empty-state" wx:if="{{resultWords.length === 0 && loading}}">
+        <text class="empty-icon">🔍</text>
+        <text class="empty-text">正在识别中...</text>
+      </view>
+      <view class="empty-state" wx:if="{{resultWords.length === 0 && !loading}}">
+        <text class="empty-icon">❌</text>
+        <text class="empty-text">未识别到物体</text>
+      </view>
+    </view>
+  </view>
+
+  <!--调试信息-->
+  <view class="debug-card" wx:if="{{showDebug && debugInfo}}">
+    <text class="debug-title">调试信息</text>
+    <text class="debug-text">{{debugInfo}}</text>
+  </view>
+
+  <!--加载提示-->
+  <view class="loading-mask" wx:if="{{loading}}">
+    <view class="loading-box">
+      <text class="loading-text">识别中...</text>
+      <text class="loading-hint">请稍候</text>
+    </view>
+  </view>
+
+  <!-- ========== 词典详情弹窗 ========== -->
+  <view class="dict-overlay" wx:if="{{showDictDetail}}" bindtap="closeDictDetail">
+    <view class="dict-panel" catchtap="preventBubble">
+
+      <!-- 词典头部：单词 + 音标 + 发音 + 收藏 -->
+      <view class="dict-header">
+        <view class="dict-word-row">
+          <text class="dict-word">{{dictDetail.word}}</text>
+          <view class="dict-header-btns">
+            <view class="dict-collect-btn" catchtap="toggleCollectFromDetail">
+              <text>{{dictDetail.collected ? '❤️' : '🤍'}}</text>
+            </view>
+            <view class="dict-close" catchtap="closeDictDetail">
+              <text>✕</text>
+            </view>
+          </view>
+        </view>
+        <!-- 音标 + 发音按钮 -->
+        <view class="dict-phonetic-row" wx:if="{{dictDetail.usphone || dictDetail.ukphone}}">
+          <view class="dict-phonetic-item" wx:if="{{dictDetail.usphone}}" bindtap="playDetailSound" data-type="us">
+            <text class="phonetic-label">US</text>
+            <text class="phonetic-text">[{{dictDetail.usphone}}]</text>
+            <text class="phonetic-play">🔊</text>
+          </view>
+          <view class="dict-phonetic-item" wx:if="{{dictDetail.ukphone}}" bindtap="playDetailSound" data-type="uk">
+            <text class="phonetic-label">UK</text>
+            <text class="phonetic-text">[{{dictDetail.ukphone}}]</text>
+            <text class="phonetic-play">🔊</text>
+          </view>
+        </view>
+        <!-- 如果没有音标，也提供发音按钮 -->
+        <view class="dict-phonetic-row" wx:if="{{!dictDetail.usphone && !dictDetail.ukphone && dictDetail.word}}">
+          <view class="dict-phonetic-item" bindtap="playDetailSound" data-type="us">
+            <text class="phonetic-label">US</text>
+            <text class="phonetic-play">🔊</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载中 -->
+      <view class="dict-loading" wx:if="{{dictDetail.loading}}">
+        <text class="dict-loading-text">词典加载中...</text>
+      </view>
+
+      <!-- 释义区域 -->
+      <view class="dict-meanings" wx:if="{{!dictDetail.loading}}">
+        <view class="dict-meaning-group" wx:for="{{dictDetail.meanings}}" wx:key="pos">
+          <!-- 词性标签 -->
+          <view class="dict-pos-row">
+            <text class="dict-pos-tag" wx:if="{{item.pos}}">{{item.pos}}</text>
+            <text class="dict-pos-tag dict-pos-none" wx:if="{{!item.pos}}">释义</text>
+          </view>
+          <!-- 义项列表 -->
+          <view class="dict-def-list">
+            <view class="dict-def-item" wx:for="{{item.defs}}" wx:for-item="def" wx:for-index="defIdx" wx:key="defIdx">
+              <text class="dict-def-num">{{defIdx + 1}}</text>
+              <text class="dict-def-text">{{def}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 词形变化 -->
+      <view class="dict-forms" wx:if="{{!dictDetail.loading && dictDetail.forms.length > 0}}">
+        <view class="dict-forms-title">词形变化</view>
+        <view class="dict-forms-list">
+          <view class="dict-form-item" wx:for="{{dictDetail.forms}}" wx:key="name">
+            <text class="form-name">{{item.name}}</text>
+            <text class="form-value">{{item.value}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 双语例句 -->
+      <view class="dict-examples" wx:if="{{!dictDetail.loading && dictDetail.examples.length > 0}}">
+        <view class="dict-examples-title">📝 例句</view>
+        <view class="dict-example-item" wx:for="{{dictDetail.examples}}" wx:key="en">
+          <view class="example-en">
+            <text class="example-num">{{index + 1}}</text>
+            <text class="example-text">{{item.en}}</text>
+          </view>
+          <view class="example-zh">
+            <text class="example-text-zh">{{item.zh}}</text>
+          </view>
+        </view>
+      </view>
+
+    </view>
+  </view>
+
+  <!-- 历史记录入口 -->
+  <view class="history-entry" bindtap="showHistoryList">
+    <text class="history-text">📋 查看最近识别记录</text>
+    <text class="history-arrow">></text>
+  </view>
+
+</view>

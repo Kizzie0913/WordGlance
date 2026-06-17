@@ -1,0 +1,227 @@
+<!--pages/friends/friends.wxml-->
+<view class="page">
+  <!-- 顶栏Tab -->
+  <view class="top-tabs">
+    <view class="tab-item {{activeTab === 'friends' ? 'tab-active' : ''}}" bindtap="switchTab" data-tab="friends">
+      <text>好友列表</text>
+      <view wx:if="{{friends.length > 0}}" class="tab-badge">{{friends.length}}</view>
+    </view>
+    <view class="tab-item {{activeTab === 'requests' ? 'tab-active' : ''}}" bindtap="switchTab" data-tab="requests">
+      <text>好友请求</text>
+      <view wx:if="{{requests.length > 0}}" class="tab-badge red">{{requests.length}}</view>
+    </view>
+    <view class="tab-item {{activeTab === 'add' ? 'tab-active' : ''}}" bindtap="switchTab" data-tab="add">
+      <text>添加好友</text>
+    </view>
+  </view>
+
+  <!-- ========== 好友列表 ========== -->
+  <scroll-view wx:if="{{activeTab === 'friends'}}" class="content-area" scroll-y scroll-x="{{false}}" style="overflow-x:hidden;">
+    <view wx:if="{{friends.length === 0}}" class="empty-box">
+      <text class="empty-emoji">👥</text>
+      <text class="empty-text">还没有好友</text>
+      <text class="empty-hint">去留言板认识更多小伙伴吧</text>
+    </view>
+
+    <view wx:else class="friend-list">
+      <view class="friend-card" wx:for="{{friends}}" wx:key="nickname">
+        <view class="friend-left" bindtap="openPk" data-name="{{item.nickname}}" data-avatar="{{item.avatar}}" data-level="{{item.level}}" data-title="{{item.title}}" data-exp="{{item.exp}}">
+          <view class="friend-avatar">{{item.avatar}}</view>
+          <view class="friend-info">
+            <view class="friend-name-row">
+              <text class="friend-name">{{item.nickname}}</text>
+              <view class="friend-level-badge">
+                <text>Lv{{item.level}}</text>
+              </view>
+            </view>
+            <text class="friend-title">{{item.title}}</text>
+            <text class="friend-power">⚔️ 战力 {{item.level * 100 + item.exp}}</text>
+          </view>
+        </view>
+        <view class="friend-actions">
+          <view class="pk-btn" bindtap="openPk" data-name="{{item.nickname}}" data-avatar="{{item.avatar}}" data-level="{{item.level}}" data-title="{{item.title}}" data-exp="{{item.exp}}">
+            <text>⚔️ PK</text>
+          </view>
+          <view class="del-btn" bindtap="deleteFriend" data-name="{{item.nickname}}">
+            <text>🗑️</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- ========== 好友请求 ========== -->
+  <scroll-view wx:if="{{activeTab === 'requests'}}" class="content-area" scroll-y scroll-x="{{false}}" style="overflow-x:hidden;">
+    <view wx:if="{{requests.length === 0}}" class="empty-box">
+      <text class="empty-emoji">📭</text>
+      <text class="empty-text">暂无好友请求</text>
+    </view>
+
+    <view wx:else class="request-list">
+      <view class="request-card" wx:for="{{requests}}" wx:key="id">
+        <view class="req-left">
+          <view class="req-avatar">{{item.fromAvatar}}</view>
+          <view class="req-info">
+            <text class="req-name">{{item.from}}</text>
+            <view class="req-level-row">
+              <text class="req-level">Lv{{item.fromLevel}}</text>
+              <text class="req-title">{{item.fromTitle}}</text>
+            </view>
+            <text class="req-time">{{item.created_at}}</text>
+          </view>
+        </view>
+        <view class="req-actions">
+          <view class="req-btn accept-btn" bindtap="acceptRequest" data-id="{{item.id}}">
+            <text>接受</text>
+          </view>
+          <view class="req-btn reject-btn" bindtap="rejectRequest" data-id="{{item.id}}">
+            <text>拒绝</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- ========== 添加好友 ========== -->
+  <view wx:if="{{activeTab === 'add'}}" class="content-area add-area">
+    <view class="search-box">
+      <input
+        class="search-input"
+        placeholder="输入对方昵称搜索"
+        value="{{searchName}}"
+        bindinput="onSearchInput"
+        maxlength="20"
+        confirm-type="search"
+        bindconfirm="searchUser"
+      />
+      <view class="search-btn {{searching ? 'btn-disabled' : ''}}" bindtap="searchUser">
+        <text>{{searching ? '搜索中...' : '🔍 搜索'}}</text>
+      </view>
+    </view>
+
+    <!-- 搜索结果 -->
+    <view wx:if="{{searchResult}}" class="search-result">
+      <view class="result-card">
+        <view class="result-avatar">{{searchResult.avatar}}</view>
+        <view class="result-info">
+          <text class="result-name">{{searchResult.nickname}}</text>
+          <text wx:if="{{searchResult.isFriend}}" class="result-tag friend-tag">已是好友</text>
+          <text wx:elif="{{searchResult.requested}}" class="result-tag requested-tag">请求已发送</text>
+        </view>
+        <view wx:if="{{!searchResult.isFriend && !searchResult.requested}}"
+              class="add-btn" bindtap="sendFriendRequest">
+          <text>+ 添加</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 提示 -->
+    <view wx:if="{{!searchResult}}" class="add-tips">
+      <text class="tips-emoji">💡</text>
+      <text class="tips-text">提示：输入在留言板出现过的昵称即可搜索</text>
+      <text class="tips-sub">好友请求需要对方确认通过</text>
+    </view>
+  </view>
+
+  <!-- ========== PK弹窗 ========== -->
+  <view wx:if="{{pkTarget}}" class="pk-overlay" catchtouchmove="preventBubble">
+    <!-- PK动画 -->
+    <view wx:if="{{showPkAnim}}" class="pk-anim-box">
+      <view class="pk-vs-anim">
+        <view class="pk-fighter left-fighter">
+          <text class="fighter-emoji">{{avatarEmoji}}</text>
+          <text class="fighter-name">{{nickName}}</text>
+        </view>
+        <view class="vs-text">⚔️ VS ⚔️</view>
+        <view class="pk-fighter right-fighter">
+          <text class="fighter-emoji">{{pkTarget.avatar}}</text>
+          <text class="fighter-name">{{pkTarget.nickname}}</text>
+        </view>
+      </view>
+      <view class="pk-loading">
+        <view class="pk-loading-bar">
+          <view class="pk-loading-fill"></view>
+        </view>
+        <text class="pk-loading-text">PK中...</text>
+      </view>
+    </view>
+
+    <!-- PK结果 -->
+    <view wx:elif="{{pkResult}}" class="pk-result-box">
+      <view class="pk-result-header">
+        <!-- 赢 -->
+        <view wx:if="{{pkResult.result === 'win'}}" class="result-icon win-icon">
+          <text>🏆</text>
+        </view>
+        <!-- 输 -->
+        <view wx:elif="{{pkResult.result === 'lose'}}" class="result-icon lose-icon">
+          <text>😢</text>
+        </view>
+        <!-- 平局 -->
+        <view wx:else class="result-icon draw-icon">
+          <text>🤝</text>
+        </view>
+      </view>
+
+      <view class="pk-result-compare">
+        <view class="compare-item compare-me">
+          <text class="compare-avatar">{{avatarEmoji}}</text>
+          <text class="compare-name">{{nickName}}</text>
+          <text class="compare-level">Lv{{pkResult.myLevel}}</text>
+          <text class="compare-title">{{pkResult.myTitle}}</text>
+          <text class="compare-power">战力 {{pkResult.myPower}}</text>
+        </view>
+        <view class="compare-vs">
+          <text wx:if="{{pkResult.result === 'win'}}" class="vs-label win-label">WIN</text>
+          <text wx:elif="{{pkResult.result === 'lose'}}" class="vs-label lose-label">LOSE</text>
+          <text wx:else class="vs-label draw-label">DRAW</text>
+        </view>
+        <view class="compare-item compare-friend">
+          <text class="compare-avatar">{{pkTarget.avatar}}</text>
+          <text class="compare-name">{{pkTarget.nickname}}</text>
+          <text class="compare-level">Lv{{pkResult.friendLevel}}</text>
+          <text class="compare-title">{{pkResult.friendTitle}}</text>
+          <text class="compare-power">战力 {{pkResult.friendPower}}</text>
+        </view>
+      </view>
+
+      <!-- 搞笑评语 -->
+      <view class="pk-comment">
+        <text class="comment-text">{{pkResult.comment}}</text>
+      </view>
+
+      <view class="pk-close-btn" bindtap="closePk">
+        <text>知道了</text>
+      </view>
+    </view>
+
+    <!-- PK确认 -->
+    <view wx:else class="pk-confirm-box">
+      <view class="pk-confirm-title">
+        <text>⚔️ 发起PK？</text>
+      </view>
+      <view class="pk-confirm-fighters">
+        <view class="confirm-fighter">
+          <text class="cf-emoji">{{avatarEmoji}}</text>
+          <text class="cf-name">{{nickName}}</text>
+          <text class="cf-level">Lv{{level}} {{title}}</text>
+        </view>
+        <text class="confirm-vs">VS</text>
+        <view class="confirm-fighter">
+          <text class="cf-emoji">{{pkTarget.avatar}}</text>
+          <text class="cf-name">{{pkTarget.nickname}}</text>
+          <text class="cf-level">Lv{{pkTarget.level}} {{pkTarget.title}}</text>
+        </view>
+      </view>
+      <text class="pk-confirm-hint">PK结果由等级、经验值和运气决定</text>
+      <view class="pk-confirm-btns">
+        <view class="pk-cancel-btn" bindtap="closePk">
+          <text>算了</text>
+        </view>
+        <view class="pk-start-btn {{pkLoading ? 'btn-disabled' : ''}}" bindtap="doPk">
+          <text>{{pkLoading ? 'PK中...' : '⚔️ 开始PK！'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

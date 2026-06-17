@@ -1,0 +1,104 @@
+<!--pages/practice/add/add.wxml-->
+<!--添加做题记录 - 得分输入-->
+
+<view class="page">
+  <!--选择分类-->
+  <view class="section card">
+    <text class="section-title">① 选择考试类型</text>
+    <view class="cat-cards">
+      <view class="cat-card {{category === item.key ? 'cat-active' : ''}}" wx:for="{{catList}}" wx:key="key" bindtap="selectCat" data-cat="{{item.key}}">
+        <text class="cat-emoji">{{item.icon}}</text>
+        <text class="cat-label">{{item.name}}</text>
+        <view class="cat-check" wx:if="{{category === item.key}}">✓</view>
+      </view>
+    </view>
+  </view>
+
+  <!--得分表格-->
+  <view class="section card" wx:if="{{category}}">
+    <text class="section-title">② 填写各题型得分</text>
+    <view class="score-table">
+      <view class="table-header">
+        <text class="th-name">题型</text>
+        <text class="th-score">得分</text>
+        <text class="th-full">满分</text>
+        <text class="th-accuracy">得分率</text>
+      </view>
+      <view class="table-row" wx:for="{{typeConfig}}" wx:key="key">
+        <text class="td-name">{{item.name}}</text>
+        <view class="td-score">
+          <input
+            class="td-input"
+            type="digit"
+            placeholder="0"
+            value="{{scores[item.key]}}"
+            bindinput="onScoreInput"
+            data-key="{{item.key}}"
+          />
+        </view>
+        <text class="td-full">{{item.fullScore}}</text>
+        <text class="td-accuracy {{typeAcc[item.key] !== undefined ? (typeAcc[item.key] >= 80 ? 'acc-great' : typeAcc[item.key] >= 60 ? 'acc-good' : 'acc-bad') : ''}}">
+          {{typeAcc[item.key] !== undefined ? typeAcc[item.key] + '%' : '--'}}
+        </text>
+      </view>
+      <!--合计行-->
+      <view class="table-row table-total" wx:if="{{totalScored > 0}}">
+        <text class="td-name td-total-label">合计</text>
+        <text class="td-score td-total-val">{{totalScored}}</text>
+        <text class="td-full td-total-val">{{totalFull}}</text>
+        <text class="td-accuracy {{totalAccuracy >= 80 ? 'acc-great' : totalAccuracy >= 60 ? 'acc-good' : 'acc-bad'}}">
+          {{totalAccuracy !== null ? totalAccuracy + '%' : '--'}}
+        </text>
+      </view>
+    </view>
+  </view>
+
+  <!--做题信息-->
+  <view class="section card" wx:if="{{category}}">
+    <text class="section-title">③ 补充信息（选填）</text>
+    <view class="info-row">
+      <text class="info-label">⏱️ 做题时长</text>
+      <input
+        class="info-input"
+        type="number"
+        placeholder="分钟数"
+        value="{{duration}}"
+        bindinput="onDurationInput"
+      />
+      <text class="info-unit">分钟</text>
+    </view>
+    <view class="info-row">
+      <text class="info-label">📌 备注</text>
+      <input
+        class="info-input"
+        placeholder="如：模拟考、错题多..."
+        value="{{note}}"
+        bindinput="onNoteInput"
+      />
+    </view>
+  </view>
+
+  <!--总得分率预览-->
+  <view class="preview-card card" wx:if="{{category && totalAccuracy !== null}}">
+    <view class="preview-row">
+      <view class="preview-left">
+        <text class="preview-label">本次总得分率</text>
+        <text class="preview-value {{totalAccuracy >= 80 ? 'acc-great' : totalAccuracy >= 60 ? 'acc-good' : 'acc-bad'}}">{{totalAccuracy}}%</text>
+        <text class="preview-detail">得分 {{totalScored}} / 满分 {{totalFull}}</text>
+      </view>
+      <view class="preview-ring">
+        <view class="ring-bg" style="background:conic-gradient(#07c160 {{totalAccuracy * 3.6}}deg, #eee {{totalAccuracy * 3.6}}deg)"></view>
+        <view class="ring-mask"></view>
+        <text class="ring-text">{{totalAccuracy}}%</text>
+      </view>
+    </view>
+  </view>
+
+  <!--保存按钮-->
+  <view class="bottom-btn-area" wx:if="{{category}}">
+    <button class="save-btn {{canSave ? '' : 'btn-disabled'}}" bindtap="saveRecord" disabled="{{!canSave}}">
+      保存记录
+    </button>
+    <text class="save-hint" wx:if="{{!canSave}}">请至少填写一个题型的得分</text>
+  </view>
+</view>

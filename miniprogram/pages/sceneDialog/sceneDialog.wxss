@@ -1,0 +1,23 @@
+/* pages/sceneDialog/sceneDialog.wxss */
+.page { background: #f0f2f5; min-height: 100vh; padding: 24rpx; }
+.card { background: white; border-radius: 20rpx; padding: 28rpx; margin-bottom: 24rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05); }
+.card-title { font-size: 30rpx; font-weight: 600; color: #333; margin-bottom: 16rpx; display: block; }
+.scene-grid { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.scene-btn { padding: 16rpx 32rpx; font-size: 26rpx; color: #666; background: #f5f6f8; border-radius: 28rpx; border: 1rpx solid transparent; transition: all 0.2s; }
+.scene-btn-active { color: #667eea; background: rgba(102,126,234,0.1); border-color: #667eea; font-weight: 600; }
+.corpus-checkbox-list { margin-top: 12rpx; }
+.corpus-checkbox { padding: 16rpx 20rpx; margin-bottom: 12rpx; background: #f5f6f8; border-radius: 12rpx; font-size: 26rpx; color: #333; border: 1rpx solid transparent; }
+.corpus-checkbox.checked { border-color: #667eea; background: rgba(102,126,234,0.08); }
+.hint { font-size: 24rpx; color: #999; display: block; padding: 16rpx 0; }
+.gen-btn { display: inline-block; background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20rpx 60rpx; border-radius: 40rpx; font-size: 28rpx; font-weight: 500; }
+.gen-btn:active { opacity: 0.8; }
+.dialog-line { display: flex; gap: 16rpx; margin-bottom: 20rpx; align-items: flex-start; }
+.line-a .dialog-role { color: #667eea; }
+.line-b .dialog-role { color: #764ba2; }
+.dialog-role { font-size: 24rpx; font-weight: 600; min-width: 48rpx; flex-shrink: 0; margin-top: 12rpx; }
+.dialog-bubble { flex: 1; padding: 16rpx 20rpx; border-radius: 16rpx; }
+.line-a .dialog-bubble { background: rgba(102,126,234,0.1); }
+.line-b .dialog-bubble { background: rgba(118,75,162,0.1); }
+.dialog-en { font-size: 28rpx; color: #333; line-height: 1.6; display: block; }
+.dialog-zh { font-size: 24rpx; color: #888; margin-top: 8rpx; display: block; }
+.dialog-tip { font-size: 22rpx; color: #999; text-align: center; padding: 16rpx 0 0; }

@@ -1,0 +1,75 @@
+<!--pages/login/login.wxml-->
+<!--登录页 - 老用户直接登录 / 新用户注册-->
+
+<view class="login-page">
+  <!--波点装饰背景-->
+  <view class="dots-bg">
+    <view class="dot" style="width:120rpx;height:120rpx;background:#07c160;top:60rpx;right:-20rpx;"></view>
+    <view class="dot" style="width:80rpx;height:80rpx;background:#ff9500;top:280rpx;left:-10rpx;"></view>
+    <view class="dot" style="width:100rpx;height:100rpx;background:#5856d6;top:450rpx;right:60rpx;"></view>
+  </view>
+
+  <!--主要内容-->
+  <view class="login-content">
+    <!--Logo区域-->
+    <view class="logo-area">
+      <view class="logo-circle">
+        <text class="logo-emoji">📚</text>
+      </view>
+      <text class="app-name">WordGlance</text>
+      <text class="app-slogan">拍照识词 · 视频跟读 · 轻松学英语</text>
+    </view>
+
+    <!--老用户：欢迎回来 + 直接登录-->
+    <view wx:if="{{isReturningUser}}" class="welcome-card card">
+      <text class="welcome-title">欢迎回来！</text>
+      <view class="welcome-avatar-circle">
+        <text class="welcome-avatar-emoji">{{avatarEmoji}}</text>
+      </view>
+      <text class="welcome-nickname">{{nickname}}</text>
+      <text class="welcome-hint">你的等级和生词都已保留</text>
+      <button class="confirm-btn" bindtap="onConfirmLogin">登录</button>
+    </view>
+
+    <!--新用户：注册表单-->
+    <view wx:elif="{{!isReturningUser}}" class="nickname-input-card card">
+      <text class="input-label">设置你的昵称</text>
+      <input class="nickname-input" placeholder="请输入昵称" value="{{nickname}}" bindinput="onNicknameInput" />
+
+      <view class="avatar-preview">
+        <view class="avatar-preview-circle">
+          <text class="avatar-preview-emoji">{{avatarEmoji}}</text>
+        </view>
+        <view class="avatar-preview-info">
+          <text class="avatar-preview-text">你的随机头像</text>
+          <view class="refresh-avatar-btn" bindtap="refreshAvatar">
+            <text>换一个</text>
+          </view>
+        </view>
+      </view>
+
+      <button class="confirm-btn" bindtap="onConfirmLogin">确认登录</button>
+    </view>
+
+    <!--底部提示-->
+    <view class="privacy">
+      <text class="privacy-text">登录即同意</text>
+      <text class="privacy-link" bindtap="showPrivacy">《用户协议》</text>
+      <text class="privacy-text">和</text>
+      <text class="privacy-link" bindtap="showPrivacy">《隐私政策》</text>
+    </view>
+
+    <!--找回账号-->
+    <view class="recover-row">
+      <text class="recover-link" bindtap="showRecover">{{showRecoverInput ? '取消找回' : '找回账号（清缓存后点这里）'}}</text>
+    </view>
+
+    <!--找回账号输入框-->
+    <view wx:if="{{showRecoverInput}}" class="recover-card card">
+      <text class="recover-title">输入你的用户ID或昵称</text>
+      <text class="recover-hint">用户ID在「个人资料」中查看，或输入你记得的昵称</text>
+      <input class="recover-input" placeholder="请输入用户ID或昵称" value="{{recoverUserId}}" bindinput="onRecoverInput" />
+      <button class="recover-btn" bindtap="doRecover">找回账号</button>
+    </view>
+  </view>
+</view>

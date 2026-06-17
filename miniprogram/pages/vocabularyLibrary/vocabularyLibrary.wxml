@@ -1,0 +1,186 @@
+<!--pages/vocabularyLibrary/vocabularyLibrary.wxml-->
+<!--页面3：我的生词语料库-->
+<view class="page-container">
+  <!--波点装饰-->
+  <view class="dots-bg">
+    <view class="dot" style="width:90rpx;height:90rpx;background:#ff9500;top:30rpx;right:40rpx;"></view>
+    <view class="dot" style="width:60rpx;height:60rpx;background:#5856d6;top:180rpx;left:30rpx;"></view>
+    <view class="dot" style="width:70rpx;height:70rpx;background:#07c160;bottom:100rpx;right:60rpx;"></view>
+  </view>
+
+  <!--Tab切换-->
+  <view class="tab-bar card">
+    <view class="tab-item {{activeTab === 'vocab' ? 'active' : ''}}" bindtap="switchTab" data-tab="vocab">
+      <text>📖 生词 ({{vocabList.length}})</text>
+    </view>
+    <view class="tab-item {{activeTab === 'corpus' ? 'active' : ''}}" bindtap="switchTab" data-tab="corpus">
+      <text>🎬 语料 ({{corpusList.length}})</text>
+    </view>
+  </view>
+
+  <!--生词Tab内容-->
+  <view wx:if="{{activeTab === 'vocab'}}">
+    <!--空状态-->
+    <view class="card empty-card" wx:if="{{vocabList.length === 0}}">
+      <view class="empty-state">
+        <text class="empty-icon">📖</text>
+        <text class="empty-text">还没有收藏生词</text>
+        <text class="empty-hint">去识图翻译中收藏吧</text>
+      </view>
+    </view>
+
+    <!--生词列表-->
+    <view class="card" wx:if="{{vocabList.length > 0}}">
+      <view class="result-header">
+        <text class="result-title">我的生词</text>
+        <text class="clear-link" bindtap="clearAllVocab">清空全部</text>
+      </view>
+      <view class="divider"></view>
+      <!-- 点击单词 → 词典详情弹窗 -->
+      <view class="vocab-item" wx:for="{{vocabList}}" wx:key="id" bindtap="showWordDetail" data-idx="{{index}}">
+        <view class="vocab-main">
+          <text class="vocab-en">{{item.english}}</text>
+          <text class="vocab-phonetic" wx:if="{{item.phonetic}}">{{item.phonetic}}</text>
+          <text class="vocab-cn">{{item.chinese}}</text>
+        </view>
+        <view class="vocab-actions" catchtap="">
+          <view class="vocab-del" catchtap="deleteVocab" data-id="{{item.id}}">
+            <text class="del-text">🗑️</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!--语料Tab内容-->
+  <view wx:if="{{activeTab === 'corpus'}}">
+    <!-- 场景筛选栏 -->
+    <scroll-view class="scene-filter" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="scene-tag {{sceneFilter === item ? 'scene-tag-active' : ''}}"
+        wx:for="{{sceneList}}" wx:key="*this"
+        bindtap="filterByScene" data-scene="{{item}}">
+        <text>{{item}}</text>
+      </view>
+    </scroll-view>
+
+    <!--空状态-->
+    <view class="card empty-card" wx:if="{{corpusList.length === 0}}">
+      <view class="empty-state">
+        <text class="empty-icon">🎬</text>
+        <text class="empty-text">还没有收藏语料</text>
+        <text class="empty-hint">去识图翻译中收藏吧</text>
+      </view>
+    </view>
+
+    <!--语料列表-->
+    <view class="card" wx:for="{{corpusList}}" wx:key="id">
+      <view class="corpus-header">
+        <view class="corpus-title-row">
+          <text class="corpus-title">{{item.title}}</text>
+          <text class="corpus-scene-tag">{{item.scene || '其他'}}</text>
+        </view>
+        <view class="corpus-del" bindtap="deleteCorpus" data-id="{{item.id}}">
+          <text class="del-text">🗑️</text>
+        </view>
+      </view>
+      <view class="divider"></view>
+      <view class="corpus-content" bindtap="showCorpusDetail" data-index="{{index}}">
+        <text class="corpus-text">{{item.content}}</text>
+      </view>
+      <text class="corpus-time">{{item.addTimeText}}</text>
+    </view>
+
+    <view class="card" wx:if="{{corpusList.length > 0}}" style="text-align:center;">
+      <text class="clear-link" bindtap="clearAllCorpus">清空全部语料</text>
+    </view>
+  </view>
+
+  <!--用户信息区-->
+  <view class="card user-bottom-card">
+    <view class="user-row" bindtap="goLogin">
+      <text class="user-emoji">{{isGuest ? '👤' : '😊'}}</text>
+      <text class="user-name-text">{{nickName}}</text>
+      <text class="user-action">{{isGuest ? '点击登录' : '已登录'}}</text>
+    </view>
+  </view>
+
+  <!-- ========== 词典详情弹窗（与拍照翻译页相同风格） ========== -->
+  <view class="dict-overlay" wx:if="{{showDictDetail}}" bindtap="closeDictDetail">
+    <view class="dict-panel" catchtap="preventBubble">
+      <!-- 词典头部 -->
+      <view class="dict-header">
+        <view class="dict-word-row">
+          <text class="dict-word">{{dictDetail.word}}</text>
+          <view class="dict-close" bindtap="closeDictDetail">
+            <text>✕</text>
+          </view>
+        </view>
+        <!-- 音标 + 发音 -->
+        <view class="dict-phonetic-row" wx:if="{{dictDetail.usphone || dictDetail.ukphone}}">
+          <view class="dict-phonetic-item" wx:if="{{dictDetail.usphone}}" bindtap="playDetailSound" data-type="us">
+            <text class="phonetic-label">US</text>
+            <text class="phonetic-text">[{{dictDetail.usphone}}]</text>
+            <text class="phonetic-play">🔊</text>
+          </view>
+          <view class="dict-phonetic-item" wx:if="{{dictDetail.ukphone}}" bindtap="playDetailSound" data-type="uk">
+            <text class="phonetic-label">UK</text>
+            <text class="phonetic-text">[{{dictDetail.ukphone}}]</text>
+            <text class="phonetic-play">🔊</text>
+          </view>
+        </view>
+        <view class="dict-phonetic-row" wx:if="{{!dictDetail.usphone && !dictDetail.ukphone && dictDetail.word}}">
+          <view class="dict-phonetic-item" bindtap="playDetailSound" data-type="us">
+            <text class="phonetic-label">US</text>
+            <text class="phonetic-play">🔊</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载中 -->
+      <view class="dict-loading" wx:if="{{dictDetail.loading}}">
+        <text class="dict-loading-text">词典加载中...</text>
+      </view>
+
+      <!-- 释义区域 -->
+      <view class="dict-meanings" wx:if="{{!dictDetail.loading}}">
+        <view class="dict-meaning-group" wx:for="{{dictDetail.meanings}}" wx:key="pos">
+          <view class="dict-pos-row">
+            <text class="dict-pos-tag" wx:if="{{item.pos}}">{{item.pos}}</text>
+            <text class="dict-pos-tag dict-pos-none" wx:if="{{!item.pos}}">释义</text>
+          </view>
+          <view class="dict-def-list">
+            <view class="dict-def-item" wx:for="{{item.defs}}" wx:for-item="def" wx:for-index="defIdx" wx:key="defIdx">
+              <text class="dict-def-num">{{defIdx + 1}}</text>
+              <text class="dict-def-text">{{def}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 词形变化 -->
+      <view class="dict-forms" wx:if="{{!dictDetail.loading && dictDetail.forms.length > 0}}">
+        <view class="dict-forms-title">词形变化</view>
+        <view class="dict-forms-list">
+          <view class="dict-form-item" wx:for="{{dictDetail.forms}}" wx:key="name">
+            <text class="form-name">{{item.name}}</text>
+            <text class="form-value">{{item.value}}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 双语例句 -->
+      <view class="dict-examples" wx:if="{{!dictDetail.loading && dictDetail.examples.length > 0}}">
+        <view class="dict-examples-title">📝 例句</view>
+        <view class="dict-example-item" wx:for="{{dictDetail.examples}}" wx:key="en">
+          <view class="example-en">
+            <text class="example-num">{{index + 1}}</text>
+            <text class="example-text">{{item.en}}</text>
+          </view>
+          <view class="example-zh">
+            <text class="example-text-zh">{{item.zh}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

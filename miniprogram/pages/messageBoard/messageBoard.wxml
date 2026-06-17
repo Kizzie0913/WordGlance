@@ -1,0 +1,130 @@
+<!--pages/messageBoard/messageBoard.wxml-->
+<view class="page">
+  <!-- 留言列表 -->
+  <scroll-view class="message-list" scroll-y enhanced show-scrollbar="{{false}}" refresher-enabled="{{true}}" refresher-triggered="{{refreshing}}" bindrefresherrefresh="onRefresh">
+    <view wx:if="{{loading && displayMessages.length === 0}}" class="loading-box">
+      <view class="loading-spinner"></view>
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <view wx:elif="{{messages.length === 0}}" class="empty-box">
+      <text class="empty-emoji">💬</text>
+      <text class="empty-text">还没有留言</text>
+      <text class="empty-hint">成为第一个发言的人吧</text>
+    </view>
+
+    <view wx:else class="message-items">
+      <view class="message-card" wx:for="{{displayMessages}}" wx:for-item="item" wx:for-index="idx" wx:key="id">
+        <view class="msg-header">
+          <view class="msg-avatar">{{item.avatar}}</view>
+          <view class="msg-info">
+            <view class="msg-name-row">
+              <text class="msg-nickname">{{item.nickname}}</text>
+              <text wx:if="{{item.isDeveloper}}" class="msg-developer-tag">👑 开发者</text>
+            </view>
+            <text class="msg-time">{{item.timeText}}</text>
+          </view>
+          <!-- 加好友按钮：别人的留言才显示 -->
+          <view wx:if="{{item.nickname !== nickName}}" class="msg-add-friend" bindtap="addFriend" data-nickname="{{item.nickname}}" data-avatar="{{item.avatar}}">
+            <text>👥+</text>
+          </view>
+          <!-- 删除按钮：自己的留言才显示 -->
+          <view wx:if="{{item.nickname === nickName}}" class="msg-delete" bindtap="deleteMessage" data-id="{{item.id}}" data-nickname="{{item.nickname}}">
+            <text>🗑️</text>
+          </view>
+        </view>
+        <!-- 文字留言 -->
+        <view wx:if="{{item.type !== 'voice'}}" class="msg-content">
+          <text>{{item.content}}</text>
+        </view>
+        <!-- 语音留言 -->
+        <view wx:else class="msg-voice" style="width: {{item.voiceWidth || 180}}rpx" bindtap="playVoice" data-url="{{item.audioUrl}}" data-id="{{item.id}}">
+          <view class="voice-play-btn {{playingId === item.id ? 'voice-playing' : ''}}">
+            <view class="voice-icon">
+              <view class="voice-bar voice-bar-1"></view>
+              <view class="voice-bar voice-bar-2"></view>
+              <view class="voice-bar voice-bar-3"></view>
+            </view>
+          </view>
+          <text class="voice-duration">{{item.duration}}''</text>
+        </view>
+        <!-- 回复按钮 -->
+        <view class="msg-reply-btn" bindtap="onReply" data-id="{{item.id}}" data-nickname="{{item.nickname}}">
+          <text>💬 回复</text>
+        </view>
+        <!-- 回复列表 -->
+        <view wx:if="{{item.replies && item.replies.length > 0}}" class="replies-box">
+          <view wx:for="{{item.replies}}" wx:for-item="reply" wx:key="id" class="reply-item">
+            <text class="reply-nickname">{{reply.nickname}}：</text>
+            <text class="reply-content">{{reply.content}}</text>
+            <text class="reply-time">{{reply.timeText || '刚刚'}}</text>
+            <!-- 删除回复按钮：仅自己发的回复显示 -->
+            <view wx:if="{{reply.userId === userId}}" class="reply-delete" catchtap="deleteReply" data-msg-id="{{item.id}}" data-reply-id="{{reply.id}}">
+              <text>🗑️</text>
+            </view>
+          </view>
+        </view>
+        <!-- 回复输入（仅当前消息） -->
+        <view wx:if="{{replyTo === item.id}}" class="reply-input-box">
+          <text class="reply-to">回复 {{replyToNickname}}：</text>
+          <input class="reply-input" placeholder="写回复..." value="{{replyContent}}" bindinput="onInputReply" bindconfirm="submitReply" confirm-type="send" focus="{{true}}" />
+          <view class="reply-cancel" bindtap="cancelReply">取消</view>
+          <view class="reply-send" bindtap="submitReply">发送</view>
+        </view>
+      </view>
+      <!-- 加载更多按钮 -->
+      <view wx:if="{{hasMore}}" class="load-more" bindtap="loadMore">
+        <text class="load-more-text">加载更多留言</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 录音状态遮罩 -->
+  <view wx:if="{{recording}}" class="recording-mask" catchtouchmove="true">
+    <view class="recording-box">
+      <view class="recording-waves">
+        <view class="recording-wave recording-wave-1"></view>
+        <view class="recording-wave recording-wave-2"></view>
+        <view class="recording-wave recording-wave-3"></view>
+      </view>
+      <text class="recording-text">{{cancelRecord ? '松开取消' : '松开发送'}}</text>
+      <text class="recording-time">{{recordDuration}}s</text>
+    </view>
+  </view>
+
+  <!-- 底部输入区域 -->
+  <view class="input-area">
+    <view class="input-row">
+      <view class="input-avatar">{{avatarEmoji}}</view>
+      <input
+        wx:if="{{inputMode === 'text'}}"
+        class="input-field"
+        placeholder="说点什么..."
+        value="{{newContent}}"
+        bindinput="onInputContent"
+        maxlength="200"
+        confirm-type="send"
+        bindconfirm="submitMessage"
+        adjust-position="{{true}}"
+      />
+      <view
+        wx:else
+        class="voice-input-btn {{recording ? 'voice-input-btn-active' : ''}}"
+        catchtouchstart="startRecord"
+        catchtouchend="onTouchEnd"
+        catchtouchmove="onRecordMove"
+        catchtouchcancel="onTouchCancel"
+      >
+        <text>{{recording ? '松开发送' : '按住说话'}}</text>
+      </view>
+      <!-- 切换文字/语音 -->
+      <view class="mode-toggle" bindtap="toggleInputMode">
+        <text>{{inputMode === 'text' ? '🎤' : '⌨️'}}</text>
+      </view>
+      <!-- 发送按钮（仅文字模式） -->
+      <view wx:if="{{inputMode === 'text'}}" class="submit-btn {{newContent ? '' : 'submit-btn-disabled'}}" bindtap="submitMessage">
+        <text>{{submitting ? '...' : '发送'}}</text>
+      </view>
+    </view>
+  </view>
+</view>

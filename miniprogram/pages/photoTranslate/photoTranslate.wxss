@@ -1,0 +1,585 @@
+/* pages/photoTranslate/photoTranslate.wxss */
+/* 页面1：拍照识图翻译 - 纯文字展示（无框选）*/
+
+.page-container {
+  padding: 24rpx 24rpx 40rpx;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f0fdf4 0%, #f9fafb 35%, #ffffff 100%);
+  box-sizing: border-box;
+}
+
+/* 波点装饰 */
+.dots-bg {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+.dot {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.13;
+}
+
+/* 卡片通用 */
+.card {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.05);
+}
+
+/* 拍照区域 */
+.photo-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400rpx;
+}
+.photo-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60rpx 0;
+}
+.photo-icon {
+  font-size: 80rpx;
+  margin-bottom: 20rpx;
+}
+.photo-text {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 12rpx;
+}
+.photo-hint {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 拍照技巧提示 */
+.tip-bar {
+  background: #fffbe6;
+  border-radius: 16rpx;
+  padding: 16rpx 24rpx;
+  margin-bottom: 20rpx;
+  border-left: 6rpx solid #ffc107;
+}
+.tip-text {
+  font-size: 22rpx;
+  color: #8a6c00;
+  line-height: 1.6;
+}
+
+/* 图片预览卡片 */
+.preview-card {
+  overflow: visible;
+}
+.preview-img {
+  width: 100%;
+  height: 600rpx;
+  border-radius: 16rpx;
+  background: #f5f5f5;
+}
+
+/* 预览操作按钮 */
+.preview-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 20rpx;
+}
+.action-btn {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  background: #f5f5f5;
+  border-radius: 16rpx;
+  font-size: 26rpx;
+  color: #555;
+  transition: all 0.2s;
+}
+.action-btn:active {
+  background: #e8e8e8;
+}
+
+/* 结果卡片 */
+.result-card {
+  padding-bottom: 24rpx;
+}
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.result-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+.tag {
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  font-weight: 500;
+}
+.tag-green {
+  background: #e6f9ed;
+  color: #07c160;
+}
+.divider {
+  height: 2rpx;
+  background: #f0f0f0;
+  margin: 20rpx 0;
+}
+
+/* 单词条目（带编号圆点，可点击） */
+.word-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 24rpx 0;
+  border-bottom: 2rpx solid #f5f5f5;
+  transition: background 0.15s;
+}
+.word-item:last-child {
+  border-bottom: none;
+}
+.word-item:active {
+  background: #f9f9f9;
+  border-radius: 12rpx;
+}
+/* 编号圆点 */
+.word-num {
+  width: 44rpx;
+  height: 44rpx;
+  min-width: 44rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #07c160;
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+.word-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+.word-en {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+.word-chinese-brief {
+  font-size: 24rpx;
+  color: #888;
+}
+/* 操作按钮组（只保留收藏） */
+.word-actions {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.word-action-btn {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f5;
+  border-radius: 50%;
+  font-size: 28rpx;
+  transition: all 0.2s;
+}
+.word-action-btn:active {
+  background: #e0e0e0;
+  transform: scale(0.92);
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40rpx 0;
+}
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 16rpx;
+}
+.empty-text {
+  font-size: 26rpx;
+  color: #999;
+}
+
+/* 加载遮罩 */
+.loading-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(255,255,255,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.loading-box {
+  background: #fff;
+  padding: 40rpx 60rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 8rpx 40rpx rgba(0,0,0,0.1);
+}
+.loading-text {
+  font-size: 28rpx;
+  color: #07c160;
+  font-weight: 500;
+}
+.loading-hint {
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 8rpx;
+}
+
+/* 调试信息卡片 */
+.debug-card {
+  position: relative;
+  z-index: 1;
+  background: #fffbe6;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
+  border: 2rpx solid #ffe58f;
+}
+.debug-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #8a6c00;
+  margin-bottom: 12rpx;
+  display: block;
+}
+.debug-text {
+  font-size: 22rpx;
+  color: #8a6c00;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+/* ======================================== */
+/* ========== 词典详情弹窗样式 ========== */
+/* ======================================== */
+
+/* 遮罩层 */
+.dict-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 弹窗面板 - 从底部弹出 */
+.dict-panel {
+  width: 100%;
+  max-height: 80vh;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 0 32rpx 48rpx;
+  overflow-y: auto;
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* 头部：单词 + 关闭 */
+.dict-header {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  padding: 32rpx 0 20rpx;
+  z-index: 1;
+  border-bottom: 2rpx solid #f0f0f0;
+}
+.dict-word-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dict-word {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 1rpx;
+}
+.dict-close {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f0f0f0;
+  font-size: 28rpx;
+  color: #999;
+  transition: all 0.2s;
+}
+.dict-close:active {
+  background: #e0e0e0;
+}
+
+/* 释义窗口头部按钮组 */
+.dict-header-btns {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.dict-collect-btn {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fdf2f8;
+  font-size: 28rpx;
+  transition: all 0.2s;
+}
+.dict-collect-btn:active {
+  background: #fce7f3;
+  transform: scale(0.92);
+}
+
+/* 音标 + 发音行 */
+.dict-phonetic-row {
+  display: flex;
+  align-items: center;
+  gap: 32rpx;
+  margin-top: 16rpx;
+}
+.dict-phonetic-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 16rpx;
+  background: #f0fdf4;
+  border-radius: 24rpx;
+  transition: all 0.15s;
+}
+.dict-phonetic-item:active {
+  background: #dcfce7;
+  transform: scale(0.96);
+}
+.phonetic-label {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #07c160;
+  background: #07c160;
+  color: #fff;
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+}
+.phonetic-text {
+  font-size: 24rpx;
+  color: #555;
+  font-style: italic;
+}
+.phonetic-play {
+  font-size: 28rpx;
+}
+
+/* 加载态 */
+.dict-loading {
+  padding: 60rpx 0;
+  text-align: center;
+}
+.dict-loading-text {
+  font-size: 28rpx;
+  color: #999;
+}
+
+/* 释义区域 */
+.dict-meanings {
+  margin-top: 24rpx;
+}
+.dict-meaning-group {
+  margin-bottom: 24rpx;
+}
+.dict-meaning-group:last-child {
+  margin-bottom: 0;
+}
+
+/* 词性标签行 */
+.dict-pos-row {
+  margin-bottom: 12rpx;
+}
+.dict-pos-tag {
+  display: inline-block;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #fff;
+  background: #07c160;
+  padding: 6rpx 20rpx;
+  border-radius: 16rpx;
+}
+.dict-pos-none {
+  background: #999;
+}
+
+/* 义项列表 */
+.dict-def-list {
+  padding-left: 8rpx;
+}
+.dict-def-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  padding: 10rpx 0;
+  line-height: 1.6;
+}
+.dict-def-num {
+  min-width: 32rpx;
+  height: 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border-radius: 50%;
+  font-size: 20rpx;
+  color: #888;
+  font-weight: 600;
+  margin-top: 4rpx;
+}
+.dict-def-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+  line-height: 1.6;
+}
+
+/* 词形变化 */
+.dict-forms {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 2rpx solid #f0f0f0;
+}
+.dict-forms-title {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #999;
+  margin-bottom: 12rpx;
+}
+.dict-forms-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+.dict-form-item {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  background: #f5f5f5;
+  padding: 8rpx 16rpx;
+  border-radius: 12rpx;
+}
+.form-name {
+  font-size: 22rpx;
+  color: #999;
+}
+.form-value {
+  font-size: 24rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+/* 双语例句 */
+.dict-examples {
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 2rpx solid #f0f0f0;
+}
+.dict-examples-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+.dict-example-item {
+  margin-bottom: 20rpx;
+  padding: 16rpx 20rpx;
+  background: #f9fafb;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #07c160;
+}
+.dict-example-item:last-child {
+  margin-bottom: 0;
+}
+.example-en {
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+}
+.example-num {
+  min-width: 28rpx;
+  height: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #07c160;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 18rpx;
+  font-weight: 600;
+  margin-top: 4rpx;
+  flex-shrink: 0;
+}
+.example-text {
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.6;
+  flex: 1;
+}
+.example-zh {
+  padding-left: 38rpx;
+  margin-top: 8rpx;
+}
+.example-text-zh {
+  font-size: 24rpx;
+  color: #888;
+  line-height: 1.5;
+}
+
+/* 历史记录入口 */
+.history-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx 24rpx;
+  margin-top: 20rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.05);
+}
+.history-text {
+  font-size: 28rpx;
+  color: #07c160;
+  font-weight: 500;
+}
+.history-arrow {
+  font-size: 28rpx;
+  color: #07c160;
+  margin-left: 8rpx;
+}

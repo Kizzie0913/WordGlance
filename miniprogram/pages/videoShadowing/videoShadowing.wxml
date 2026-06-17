@@ -1,0 +1,160 @@
+<!--pages/videoShadowing/videoShadowing.wxml-->
+<view class="page-container">
+
+  <!-- 波点装饰（pointer-events:none 避免挡住点击） -->
+  <view class="dots-bg" style="pointer-events:none;">
+    <view class="dot" style="width:80rpx;height:80rpx;background:#5856d6;top:30rpx;right:50rpx;"></view>
+    <view class="dot" style="width:60rpx;height:60rpx;background:#ff2d55;top:200rpx;left:20rpx;"></view>
+    <view class="dot" style="width:70rpx;height:70rpx;background:#ffcc00;bottom:200rpx;left:60rpx;"></view>
+  </view>
+
+  <!-- ===== 步骤0：上传视频 ===== -->
+  <view class="card upload-area" wx:if="{{step === 0}}">
+    <button class="upload-btn" bindtap="chooseVideo" hover-class="upload-btn-hover">
+      <text class="upload-icon">🎬</text>
+      <text class="upload-text">点击上传本地MP4视频</text>
+      <text class="upload-hint">仅支持本地视频，禁止解析外网链接</text>
+    </button>
+  </view>
+
+  <!-- ===== 步骤1：粘贴字幕 ===== -->
+  <view wx:if="{{step === 1}}">
+    <!-- 视频信息条 -->
+    <view class="card video-info-card">
+      <text class="video-name">🎬 {{videoName}}</text>
+      <text class="btn-change" bindtap="goBackStep">换视频</text>
+    </view>
+
+    <!-- 字幕输入区 -->
+    <view class="card subtitle-input-card">
+      <view class="result-header">
+        <text class="result-title">📝 输入字幕</text>
+        <text class="tag tag-purple" bindtap="loadExample">加载示例</text>
+      </view>
+      <view class="divider"></view>
+      <textarea
+        class="subtitle-textarea"
+        placeholder="请粘贴字幕文本...\n支持SRT格式，也支持纯英文文本"
+        value="{{subtitleText}}"
+        bindinput="onSubtitleInput"
+        maxlength="-1"
+        auto-height
+      ></textarea>
+      <view class="subtitle-tips">
+        <text class="tip-text">💡 支持SRT格式（含时间戳），也支持纯英文文本</text>
+      </view>
+    </view>
+
+    <!-- 确认按钮 -->
+    <view class="btn-primary" bindtap="confirmSubtitles">确认字幕，开始跟读</view>
+  </view>
+
+  <!-- ===== 步骤2：播放跟读 ===== -->
+  <view wx:if="{{step === 2}}">
+    <!-- 视频播放器 -->
+    <view class="card player-card">
+      <video
+        id="myVideo"
+        class="video-player"
+        src="{{videoSrc}}"
+        controls
+        show-center-play-btn
+        enable-progress-gesture
+        bindtimeupdate="onTimeUpdate"
+        bindplay="onPlay"
+        bindpause="onPause"
+        play-btn-position="center"
+      ></video>
+
+      <!-- 播放速度控制 -->
+      <view class="speed-control">
+        <text class="speed-label">倍速：</text>
+        <view class="speed-btns">
+          <text class="speed-btn {{playbackRate === 0.5 ? 'active' : ''}}" bindtap="setSpeed" data-rate="0.5">0.5x</text>
+          <text class="speed-btn {{playbackRate === 0.75 ? 'active' : ''}}" bindtap="setSpeed" data-rate="0.75">0.75x</text>
+          <text class="speed-btn {{playbackRate === 1 ? 'active' : ''}}" bindtap="setSpeed" data-rate="1">1x</text>
+          <text class="speed-btn {{playbackRate === 1.5 ? 'active' : ''}}" bindtap="setSpeed" data-rate="1.5">1.5x</text>
+          <text class="speed-btn {{playbackRate === 2 ? 'active' : ''}}" bindtap="setSpeed" data-rate="2">2x</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="player-actions">
+        <view class="p-action" bindtap="goBackStep">🔄 换字幕</view>
+        <view class="p-action" bindtap="toggleLoop">
+          <text>{{isLooping ? '🔁 取消循环' : '🔁 单句循环'}}</text>
+        </view>
+        <view class="p-action" bindtap="extractWords">
+          <text>📖 提取单词</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 双语字幕区域（点击句子可发音） -->
+    <view class="card subtitle-card">
+      <view class="result-header">
+        <text class="result-title">📝 双语字幕</text>
+        <text class="tag tag-purple">{{subtitles.length}}条</text>
+      </view>
+      <view class="divider"></view>
+      <scroll-view class="subtitle-list" scroll-y>
+        <view
+          class="subtitle-item {{item.active ? 'active' : ''}}"
+          wx:for="{{subtitles}}"
+          wx:key="index"
+          bindtap="playSentence"
+          data-text="{{item.en}}"
+        >
+          <text class="sub-en">{{item.en}}</text>
+          <text class="sub-cn">{{item.cn}}</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 提取的单词列表 -->
+    <view class="card" wx:if="{{extractedWords.length > 0}}">
+      <view class="result-header">
+        <text class="result-title">📖 视频单词</text>
+        <text class="tag tag-green">{{extractedWords.length}}个</text>
+      </view>
+      <view class="divider"></view>
+      <view class="ext-word-item" wx:for="{{extractedWords}}" wx:key="english">
+        <view class="ext-word-speak" bindtap="playSentence" data-text="{{item.english}}">
+          <text class="speak-icon">🔊</text>
+        </view>
+        <view class="ext-word-main">
+          <text class="ext-word-en">{{item.english}}</text>
+          <text class="ext-word-phonetic">{{item.phonetic}}</text>
+        </view>
+        <text class="ext-word-cn">{{item.chinese}}</text>
+        <view class="ext-word-btn" bindtap="addWordFromVideo" data-word="{{item}}">
+          <text class="action-text">{{item.collected ? '✅' : '⭐'}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 翻译加载提示 -->
+    <view class="card loading-card" wx:if="{{isTranslating}}">
+      <text class="loading-text">🔄 正在翻译单词，请稍候...</text>
+    </view>
+
+    <!-- 录音跟读区域 -->
+    <view class="card record-card">
+      <view class="result-header">
+        <text class="result-title">🎙️ 录音跟读</text>
+      </view>
+      <view class="divider"></view>
+      <view class="record-area">
+        <view class="record-btn {{isRecording ? 'recording' : ''}}" bindtap="toggleRecord">
+          <text>{{isRecording ? '⏹️ 停止' : '🎙️ 录音'}}</text>
+        </view>
+        <view class="play-btn" bindtap="playRecording" wx:if="{{recordSrc}}">
+          <text>▶️ 听自己</text>
+        </view>
+        <view class="play-btn" bindtap="playOriginal" wx:if="{{recordSrc}}">
+          <text>🔊 听原声</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

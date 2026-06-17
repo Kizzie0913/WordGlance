@@ -15,3 +15,6 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# WeChat Mini Program
+miniprogram/project.private.config.json

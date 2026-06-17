@@ -1,0 +1,31 @@
+<!--pages/websiteNav/websiteNav.wxml-->
+<!--英语学习网站导航-->
+
+<view class="page">
+  <!--顶部-->
+  <view class="header">
+    <text class="header-title">🌐 英语学习网站导航</text>
+    <text class="header-desc">点击复制链接，在浏览器中打开</text>
+  </view>
+
+  <!--网站网格-->
+  <view class="site-grid">
+    <view class="site-card" wx:for="{{sites}}" wx:key="url" bindtap="copyUrl" data-url="{{item.url}}" data-name="{{item.name}}">
+      <view class="site-icon-box">
+        <text class="site-icon">{{item.icon}}</text>
+      </view>
+      <text class="site-name">{{item.name}}</text>
+      <text class="site-desc">{{item.desc}}</text>
+      <view class="site-copy-btn">
+        <text class="copy-text">复制链接</text>
+      </view>
+    </view>
+  </view>
+
+  <!--空状态-->
+  <view class="empty-box" wx:if="{{sites.length === 0}}">
+    <text class="empty-emoji">📭</text>
+    <text class="empty-text">暂无网站链接</text>
+    <text class="empty-hint">请联系管理员添加</text>
+  </view>
+</view>

@@ -1,0 +1,418 @@
+/* pages/index/index.wxss */
+
+.user-card {
+  display: flex;
+  flex-direction: column;
+  padding: 30rpx;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 20rpx;
+}
+
+.avatar-box {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+}
+
+.avatar-emoji {
+  font-size: 48rpx;
+}
+
+.user-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.user-name {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #333;
+  margin-right: 16rpx;
+}
+
+.level-badge {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #5856d6, #ff2d55);
+  border-radius: 20rpx;
+  padding: 4rpx 16rpx;
+}
+
+.level-emoji {
+  font-size: 24rpx;
+  margin-right: 6rpx;
+}
+
+.level-text {
+  font-size: 22rpx;
+  color: #fff;
+  font-weight: 500;
+}
+
+.user-desc {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* 退出登录按钮 */
+.logout-btn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #f5f5f5;
+  margin-left: 16rpx;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.logout-btn:active {
+  background: #e8e8e8;
+  transform: scale(0.92);
+}
+.logout-icon {
+  font-size: 32rpx;
+}
+
+/* 经验值进度条 */
+.exp-progress {
+  width: 100%;
+  margin-top: 10rpx;
+}
+
+.exp-bar {
+  width: 100%;
+  height: 12rpx;
+  background: #f0f0f0;
+  border-radius: 6rpx;
+  overflow: hidden;
+  margin-bottom: 8rpx;
+}
+
+.exp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #07c160, #5856d6);
+  border-radius: 6rpx;
+  transition: width 0.3s ease;
+}
+
+.exp-text {
+  font-size: 22rpx;
+  color: #999;
+  display: block;
+  text-align: right;
+}
+
+.exp-max {
+  width: 100%;
+  margin-top: 10rpx;
+  text-align: center;
+}
+
+.exp-max-text {
+  font-size: 28rpx;
+  color: #ff2d55;
+  font-weight: bold;
+}
+
+/* 功能入口 */
+.func-card {
+  padding: 28rpx 30rpx;
+  margin-top: 20rpx;
+}
+
+.func-row {
+  display: flex;
+  align-items: center;
+}
+
+.func-icon-box {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+}
+
+.func-emoji {
+  font-size: 44rpx;
+}
+
+.func-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.func-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 6rpx;
+}
+
+.func-desc {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.func-arrow {
+  font-size: 28rpx;
+  color: #ccc;
+  margin-left: 12rpx;
+}
+
+/* 学习统计 */
+.stats-card {
+  padding: 28rpx 30rpx;
+  margin-top: 20rpx;
+}
+
+.stats-title {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 24rpx;
+  display: block;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-around;
+}
+
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stats-num {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #07c160;
+  margin-bottom: 8rpx;
+}
+
+.stats-label {
+  font-size: 22rpx;
+  color: #999;
+}
+
+/* 修改资料弹窗 */
+.profile-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-panel {
+  width: 600rpx;
+  background: white;
+  border-radius: 24rpx;
+  padding: 40rpx;
+  animation: slideUp 0.25s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(60rpx); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40rpx;
+}
+
+.profile-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.profile-close {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: #999;
+  border-radius: 50%;
+  background: #f5f5f5;
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 36rpx;
+}
+
+.profile-avatar-circle {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+
+.profile-avatar-emoji {
+  font-size: 48rpx;
+}
+
+.profile-avatar-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-avatar-text {
+  font-size: 26rpx;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+.profile-avatar-refresh {
+  font-size: 22rpx;
+  color: #07c160;
+  padding: 4rpx 16rpx;
+  background: rgba(7, 193, 96, 0.1);
+  border-radius: 16rpx;
+  align-self: flex-start;
+}
+
+.profile-field {
+  margin-bottom: 36rpx;
+}
+
+.profile-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 12rpx;
+  display: block;
+}
+
+.profile-input {
+  height: 80rpx;
+  background: #f5f6f8;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+/* 用户ID显示 */
+.profile-userid-row {
+  display: flex;
+  align-items: center;
+  background: #f5f6f8;
+  border-radius: 16rpx;
+  padding: 16rpx 24rpx;
+  margin-top: 8rpx;
+}
+
+.profile-userid {
+  flex: 1;
+  font-size: 26rpx;
+  color: #666;
+  word-break: break-all;
+}
+
+.profile-copy-btn {
+  padding: 8rpx 24rpx;
+  background: rgba(7,193,96,0.1);
+  border-radius: 20rpx;
+  margin-left: 16rpx;
+  flex-shrink: 0;
+}
+
+.profile-copy-btn text {
+  font-size: 24rpx;
+  color: #07c160;
+}
+
+.profile-btns {
+  display: flex;
+  gap: 20rpx;
+}
+
+.profile-cancel-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  background: #f5f5f5;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  color: #666;
+}
+
+.profile-save-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  background: #07c160;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  color: white;
+  font-weight: 500;
+}
+
+.profile-save-btn:active {
+  opacity: 0.85;
+}
+
+/* 客服联系 */
+.contact-row {
+  display: flex;
+  justify-content: center;
+  padding: 40rpx 0 60rpx;
+}
+
+.contact-btn {
+  background: transparent !important;
+  color: #007aff !important;
+  font-size: 26rpx;
+  border: none !important;
+  line-height: 1.6;
+  padding: 0 20rpx;
+  margin: 0;
+  display: inline;
+}
+
+.contact-btn::after {
+  border: none !important;
+}

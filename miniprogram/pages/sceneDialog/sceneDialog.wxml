@@ -1,0 +1,49 @@
+<!--pages/sceneDialog/sceneDialog.wxml-->
+<view class="page">
+  <!-- 场景选择 -->
+  <view class="card">
+    <text class="card-title">🎭 选择场景</text>
+    <view class="scene-grid">
+      <view wx:for="{{scenes}}" wx:key="*this"
+        class="scene-btn {{selectedScene === item ? 'scene-btn-active' : ''}}"
+        bindtap="selectScene" data-scene="{{item}}">
+        <text>{{item}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 语料选择（可选） -->
+  <view wx:if="{{selectedScene}}" class="card">
+    <text class="card-title">📚 选用语料（可选）</text>
+    <view wx:if="{{corpusList.length > 0}}" class="corpus-checkbox-list">
+      <view wx:for="{{corpusList}}" wx:key="id"
+        class="corpus-checkbox {{selectedCorpus.indexOf(item.id) >= 0 ? 'checked' : ''}}"
+        bindtap="toggleCorpus" data-id="{{item.id}}">
+        <text>{{item.sentence}}</text>
+      </view>
+    </view>
+    <text wx:else class="hint">暂无语料，可先去拍照翻译收藏</text>
+  </view>
+
+  <!-- 生成按钮 -->
+  <view wx:if="{{selectedScene}}" class="card" style="text-align:center;">
+    <view class="gen-btn" bindtap="generateDialog">
+      <text>{{loading ? '生成中...' : '🎬 生成对话'}}</text>
+    </view>
+  </view>
+
+  <!-- 对话结果 -->
+  <view wx:if="{{dialog}}" class="card">
+    <text class="card-title">🎬 情景对话</text>
+    <view wx:for="{{dialog.lines}}" wx:key="index" class="dialog-line {{index % 2 === 0 ? 'line-a' : 'line-b'}}">
+      <text class="dialog-role">{{item.role}}</text>
+      <view class="dialog-bubble">
+        <text class="dialog-en">{{item.text}}</text>
+        <text class="dialog-zh">{{item.zh}}</text>
+      </view>
+    </view>
+    <view class="dialog-tip">
+      <text>{{dialog.tip}}</text>
+    </view>
+  </view>
+</view>

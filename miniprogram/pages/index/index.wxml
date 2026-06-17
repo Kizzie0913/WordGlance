@@ -1,0 +1,201 @@
+<!--pages/index/index.wxml-->
+<!--首页 - 功能入口和用户信息 + 等级显示-->
+
+<view class="page-container">
+  <!--波点装饰-->
+  <view class="dots-bg">
+    <view class="dot" style="width:100rpx;height:100rpx;background:#07c160;top:40rpx;right:30rpx;"></view>
+    <view class="dot" style="width:70rpx;height:70rpx;background:#ff9500;top:200rpx;left:20rpx;"></view>
+    <view class="dot" style="width:80rpx;height:80rpx;background:#5ac8fa;bottom:200rpx;right:60rpx;"></view>
+  </view>
+
+  <!--用户信息区 + 等级显示-->
+  <view class="user-card card">
+    <view class="user-info" bindtap="goLogin">
+      <view class="avatar-box">
+        <text class="avatar-emoji">{{avatarEmoji}}</text>
+      </view>
+      <view class="user-text">
+        <view class="user-name-row">
+          <text class="user-name">{{nickName}}</text>
+          <view class="level-badge">
+            <text class="level-emoji">{{levelEmoji}}</text>
+            <text class="level-text">Lv{{level}} {{title}}</text>
+          </view>
+        </view>
+        <text class="user-desc">{{isGuest ? '点击登录' : levelDesc}}</text>
+      </view>
+      <view class="logout-btn" wx:if="{{!isGuest}}" catchtap="onLogout">
+        <text class="logout-icon">⚙️</text>
+      </view>
+    </view>
+    
+    <!--经验值进度条-->
+    <view class="exp-progress" wx:if="{{!isGuest && !isMaxLevel}}">
+      <view class="exp-bar">
+        <view class="exp-fill" style="width:{{progress}}%;"></view>
+      </view>
+      <text class="exp-text">EXP: {{exp}}/{{nextLevelExp}}</text>
+    </view>
+    <view class="exp-max" wx:if="{{!isGuest && isMaxLevel}}">
+      <text class="exp-max-text">MAX LEVEL 🎉</text>
+    </view>
+  </view>
+
+  <!--功能入口卡片-->
+  <view class="func-card card" bindtap="goTranslate">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(7,193,96,0.1);">
+        <text class="func-emoji">📷</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">拍照识图翻译</text>
+        <text class="func-desc">拍照或上传图片，识别物品学英语</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+
+  <view class="func-card card" bindtap="goLibrary">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(255,149,0,0.1);">
+        <text class="func-emoji">📝</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">我的生词语料库</text>
+        <text class="func-desc">{{vocabCount}}个生词 · {{corpusCount}}条语料</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+
+  <view class="func-card card" bindtap="goMessageBoard">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(255,59,48,0.1);">
+        <text class="func-emoji">💬</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">留言板</text>
+        <text class="func-desc">看看大家在说什么</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+
+  <view class="func-card card" bindtap="goPractice">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(88,86,214,0.1);">
+        <text class="func-emoji">📊</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">做题记录</text>
+        <text class="func-desc">记录正确率，追踪进步轨迹</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+
+  <view class="func-card card" bindtap="goPomodoro">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(255,99,71,0.1);">
+        <text class="func-emoji">🍅</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">番茄钟</text>
+        <text class="func-desc">专注25分钟，休息5分钟</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+
+  <view class="section-title">🛠️ 工具</view>
+  <view class="func-card card" bindtap="goSceneDialog">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(0,122,255,0.1);">
+        <text class="func-emoji">🎬</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">场景对话生成</text>
+        <text class="func-desc">一键生成情景对话脚本</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+
+  <view class="func-card card" bindtap="goWebsiteNav">
+    <view class="func-row">
+      <view class="func-icon-box" style="background:rgba(0,122,255,0.1);">
+        <text class="func-emoji">🌐</text>
+      </view>
+      <view class="func-info">
+        <text class="func-title">英语学习网站导航</text>
+        <text class="func-desc">精选学习资源，一键直达</text>
+      </view>
+      <text class="func-arrow">></text>
+    </view>
+  </view>
+  
+  <!--学习统计-->
+  <view class="stats-card card">
+    <text class="stats-title">📊 学习概览</text>
+    <view class="stats-row">
+      <view class="stats-item">
+        <text class="stats-num">{{vocabCount}}</text>
+        <text class="stats-label">收藏生词</text>
+      </view>
+      <view class="stats-item">
+        <text class="stats-num">{{todayCount}}</text>
+        <text class="stats-label">今日新增</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 修改资料弹窗 -->
+  <view wx:if="{{showProfileEditor}}" class="profile-overlay" catchtouchmove="true">
+    <view class="profile-panel">
+      <view class="profile-header">
+        <text class="profile-title">修改资料</text>
+        <view class="profile-close" bindtap="cancelEditProfile">
+          <text>✕</text>
+        </view>
+      </view>
+      <view class="profile-avatar-row">
+        <view class="profile-avatar-circle">
+          <text class="profile-avatar-emoji">{{editAvatar}}</text>
+        </view>
+        <view class="profile-avatar-info">
+          <text class="profile-avatar-text">头像</text>
+          <view class="profile-avatar-refresh" bindtap="refreshEditAvatar">
+            <text>换一个</text>
+          </view>
+        </view>
+      </view>
+      <view class="profile-field">
+        <text class="profile-label">用户ID（请保存好）</text>
+        <view class="profile-userid-row">
+          <text class="profile-userid">{{editUserId}}</text>
+          <view class="profile-copy-btn" bindtap="copyUserId">
+            <text>复制</text>
+          </view>
+        </view>
+      </view>
+      <view class="profile-field">
+        <text class="profile-label">昵称</text>
+        <input class="profile-input" value="{{editNickname}}" bindinput="onEditNicknameInput" maxlength="20" placeholder="输入新昵称" />
+      </view>
+      <view class="profile-btns">
+        <view class="profile-cancel-btn" bindtap="cancelEditProfile">
+          <text>取消</text>
+        </view>
+        <view class="profile-save-btn" bindtap="saveProfile">
+          <text>保存</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!--客服联系-->
+  <view class="contact-row">
+    <button class="contact-btn" open-type="contact">遇到问题？点击联系我</button>
+  </view>
+</view>

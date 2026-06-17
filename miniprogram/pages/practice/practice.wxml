@@ -1,0 +1,129 @@
+<!--pages/practice/practice.wxml-->
+<!--做题记录 - 列表 + 统计-->
+
+<view class="page">
+  <!--顶部导航-->
+  <view class="nav-bar">
+    <view class="nav-back" bindtap="goBack">
+      <text class="nav-back-icon">←</text>
+      <text class="nav-back-text">首页</text>
+    </view>
+    <text class="nav-title">做题记录</text>
+    <view class="nav-placeholder"></view>
+  </view>
+
+  <!--顶部切换-->
+  <view class="cat-tabs">
+    <view class="cat-tab {{activeCategory === 'all' ? 'cat-active' : ''}}" bindtap="switchCategory" data-cat="all">
+      <text>全部</text>
+    </view>
+    <view class="cat-tab {{activeCategory === item.key ? 'cat-active' : ''}}" wx:for="{{catList}}" wx:key="key" bindtap="switchCategory" data-cat="{{item.key}}">
+      <text>{{item.icon}} {{item.name}}</text>
+    </view>
+  </view>
+
+  <!--统计卡片-->
+  <view class="stats-card card" wx:if="{{avgData}}">
+    <!-- 最近一次得分率 -->
+    <view class="last-accuracy-section">
+      <text class="last-accuracy-label">最近一次得分率</text>
+      <text class="last-accuracy-value {{lastAccuracy >= 80 ? 'acc-great' : lastAccuracy >= 60 ? 'acc-good' : 'acc-bad'}}">{{lastAccuracy}}%</text>
+    </view>
+    <!-- 近期平均得分率 -->
+    <view class="stats-divider"></view>
+    <view class="stats-title">最近{{avgData.count}}次平均得分率</view>
+    <view class="stats-row">
+      <view class="stats-item">
+        <text class="stats-value {{avgData.avgAccuracy >= 80 ? 'acc-great' : avgData.avgAccuracy >= 60 ? 'acc-good' : 'acc-bad'}}">{{avgData.avgAccuracy}}%</text>
+        <text class="stats-label">总平均</text>
+      </view>
+      <view class="stats-item" wx:for="{{typeAvgs}}" wx:key="key">
+        <text class="stats-value {{item.avg >= 80 ? 'acc-great' : item.avg >= 60 ? 'acc-good' : 'acc-bad'}}">{{item.avg}}%</text>
+        <text class="stats-label">{{item.name}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!--近期正确率柱状图-->
+  <view class="chart-card card" wx:if="{{chartData.length > 0}}">
+    <text class="chart-title">近期得分率走势</text>
+    <view class="chart-sub">最近 {{chartData.length}} 次做题</view>
+    <scroll-view class="chart-scroll" scroll-x>
+      <view class="chart-body">
+        <!-- Y轴刻度 -->
+        <view class="chart-y">
+          <text class="y-label">100%</text>
+          <text class="y-label">75%</text>
+          <text class="y-label">50%</text>
+          <text class="y-label">25%</text>
+          <text class="y-label">0%</text>
+        </view>
+        <!-- 柱子区域 -->
+        <view class="chart-bars">
+          <view class="bar-col" wx:for="{{chartData}}" wx:key="id">
+            <text class="bar-value">{{item.accuracy}}%</text>
+            <view class="bar-track">
+              <view class="bar-fill" style="height:{{item.height}}rpx;background:{{item.color}}"></view>
+            </view>
+            <text class="bar-label">{{item.label}}</text>
+            <text class="bar-date">{{item.dateStr}}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="chart-legend">
+      <view class="legend-item"><view class="legend-dot" style="background:#07c160"></view><text>≥80% 优秀</text></view>
+      <view class="legend-item"><view class="legend-dot" style="background:#ff9500"></view><text>60-79% 良好</text></view>
+      <view class="legend-item"><view class="legend-dot" style="background:#ff3b30"></view><text>&lt;60% 待提高</text></view>
+    </view>
+  </view>
+
+  <!--空状态-->
+  <view wx:if="{{records.length === 0}}" class="empty-box">
+    <text class="empty-emoji">📊</text>
+    <text class="empty-text">还没有做题记录</text>
+    <text class="empty-hint">点击右下角 + 添加第一次记录吧</text>
+  </view>
+
+  <!--记录列表-->
+  <scroll-view wx:else class="record-list" scroll-y>
+    <view class="record-card card" wx:for="{{records}}" wx:key="id">
+      <view class="record-header">
+        <view class="record-cat-badge">
+        <text>{{item.categoryIcon}} {{item.categoryName}}</text>
+      </view>
+        <text class="record-date">{{item.dateStr}}</text>
+      </view>
+
+      <view class="record-accuracy-ring">
+        <view class="ring-inner">
+          <text class="ring-value {{item.accuracy >= 80 ? 'acc-great' : item.accuracy >= 60 ? 'acc-good' : 'acc-bad'}}">{{item.accuracy}}%</text>
+          <text class="ring-label">得分率</text>
+        </view>
+      </view>
+
+      <view class="record-types">
+        <view class="type-row" wx:for="{{item.types}}" wx:for-item="t" wx:key="key">
+          <text class="type-name">{{t.name}}</text>
+          <view class="type-bar-bg">
+            <view class="type-bar-fill" style="width:{{t.fullScore > 0 ? (t.score || 0) / t.fullScore * 100 : 0}}%"></view>
+          </view>
+          <text class="type-score">{{t.score || 0}}/{{t.fullScore}}</text>
+        </view>
+      </view>
+
+      <view class="record-footer">
+        <text class="record-duration" wx:if="{{item.duration}}">⏱️ {{item.duration}}分钟</text>
+        <text class="record-note" wx:if="{{item.note}}">📌 {{item.note}}</text>
+        <view class="record-del" catchtap="deleteRecord" data-id="{{item.id}}">
+          <text>🗑️</text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!--底部添加按钮-->
+  <view class="fab-btn" bindtap="goAdd">
+    <text class="fab-icon">+</text>
+  </view>
+</view>

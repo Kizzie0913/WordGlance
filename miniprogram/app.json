@@ -1,0 +1,56 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/index/index",
+    "pages/photoTranslate/photoTranslate",
+    "pages/vocabularyLibrary/vocabularyLibrary",
+    "pages/messageBoard/messageBoard",
+    "pages/friends/friends",
+    "pages/practice/practice",
+    "pages/practice/add/add",
+    "pages/pomodoro/pomodoro",
+    "pages/websiteNav/websiteNav",
+    "pages/sceneDialog/sceneDialog"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "WordGlance",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f5f5",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#07c160",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "images/home.png",
+        "selectedIconPath": "images/home-active.png"
+      },
+      {
+        "pagePath": "pages/photoTranslate/photoTranslate",
+        "text": "识图翻译",
+        "iconPath": "images/translate.png",
+        "selectedIconPath": "images/translate-active.png"
+      },
+      {
+        "pagePath": "pages/vocabularyLibrary/vocabularyLibrary",
+        "text": "生词库",
+        "iconPath": "images/library.png",
+        "selectedIconPath": "images/library-active.png"
+      },
+      {
+        "pagePath": "pages/friends/friends",
+        "text": "好友",
+        "iconPath": "images/friend.png",
+        "selectedIconPath": "images/friend-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

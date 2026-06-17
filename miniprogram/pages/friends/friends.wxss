@@ -1,0 +1,774 @@
+/* pages/friends/friends.wxss */
+
+.page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* ========== 顶栏Tab ========== */
+.top-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1rpx solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 28rpx 0;
+  font-size: 28rpx;
+  color: #999;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.tab-active {
+  color: #667eea;
+  font-weight: 600;
+}
+
+.tab-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60rpx;
+  height: 6rpx;
+  background: #667eea;
+  border-radius: 3rpx;
+}
+
+.tab-badge {
+  display: inline-block;
+  background: #667eea;
+  color: white;
+  font-size: 18rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  margin-left: 8rpx;
+  padding: 0 8rpx;
+}
+
+.tab-badge.red {
+  background: #ff4757;
+}
+
+/* ========== 内容区域 ========== */
+.content-area {
+  flex: 1;
+  height: calc(100vh - 100rpx);
+  padding: 20rpx 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 200rpx;
+}
+
+.empty-emoji {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-text {
+  color: #333;
+  font-size: 30rpx;
+  font-weight: 500;
+}
+
+.empty-hint {
+  color: #999;
+  font-size: 24rpx;
+  margin-top: 8rpx;
+}
+
+/* ========== 好友列表 ========== */
+.friend-list {
+  padding-bottom: 40rpx;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-radius: 16rpx;
+  padding: 20rpx 16rpx;
+  margin: 0 16rpx 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+  width: calc(100% - 32rpx);
+}
+
+.friend-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.friend-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.friend-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.friend-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.friend-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240rpx;
+}
+
+.friend-level-badge {
+  background: #667eea;
+  color: white;
+  font-size: 18rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 12rpx;
+}
+
+.friend-title {
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 4rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 240rpx;
+}
+
+.friend-power {
+  font-size: 20rpx;
+  color: #764ba2;
+  margin-top: 4rpx;
+  font-weight: 500;
+}
+
+.friend-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  flex-shrink: 0;
+}
+
+.pk-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+  border-radius: 24rpx;
+  font-weight: 500;
+}
+
+.del-btn {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}
+
+.del-btn:active {
+  opacity: 1;
+}
+
+/* ========== 好友请求 ========== */
+.request-list {
+  padding-bottom: 40rpx;
+}
+
+.request-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  border-radius: 16rpx;
+  padding: 20rpx 16rpx;
+  margin: 0 16rpx 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+  width: calc(100% - 32rpx);
+}
+
+.req-left {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.req-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.req-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.req-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.req-level-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 4rpx;
+}
+
+.req-level {
+  font-size: 20rpx;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.req-title {
+  font-size: 20rpx;
+  color: #999;
+}
+
+.req-time {
+  font-size: 20rpx;
+  color: #bbb;
+  margin-top: 4rpx;
+}
+
+.req-actions {
+  display: flex;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
+.req-btn {
+  padding: 12rpx 28rpx;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.accept-btn {
+  background: #07c160;
+  color: white;
+}
+
+.reject-btn {
+  background: #f0f2f5;
+  color: #666;
+}
+
+/* ========== 添加好友 ========== */
+.add-area {
+  padding: 20rpx 24rpx 40rpx;
+}
+
+.search-box {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 30rpx;
+}
+
+.search-input {
+  flex: 1;
+  height: 80rpx;
+  background: white;
+  border-radius: 40rpx;
+  padding: 0 32rpx;
+  font-size: 28rpx;
+  color: #333;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.search-btn {
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0 32rpx;
+  background: #667eea;
+  color: white;
+  border-radius: 40rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+}
+
+/* 搜索结果 */
+.search-result {
+  margin-top: 10rpx;
+}
+
+.result-card {
+  display: flex;
+  align-items: center;
+  background: white;
+  border-radius: 16rpx;
+  padding: 28rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.result-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.result-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.result-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.result-tag {
+  font-size: 22rpx;
+  padding: 2rpx 12rpx;
+  border-radius: 8rpx;
+  display: inline-block;
+  width: fit-content;
+}
+
+.friend-tag {
+  background: #e8f5e9;
+  color: #07c160;
+}
+
+.requested-tag {
+  background: #fff3e0;
+  color: #ff9500;
+}
+
+.add-btn {
+  background: #667eea;
+  color: white;
+  font-size: 26rpx;
+  padding: 12rpx 32rpx;
+  border-radius: 28rpx;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* 提示 */
+.add-tips {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 100rpx;
+}
+
+.tips-emoji {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+}
+
+.tips-text {
+  font-size: 28rpx;
+  color: #666;
+  text-align: center;
+}
+
+.tips-sub {
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 10rpx;
+}
+
+/* ========== PK弹窗 ========== */
+.pk-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+/* PK动画 */
+.pk-anim-box {
+  background: white;
+  border-radius: 32rpx;
+  padding: 60rpx 40rpx;
+  width: 85%;
+  max-width: 600rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pk-vs-anim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 30rpx;
+  margin-bottom: 40rpx;
+}
+
+.pk-fighter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.fighter-emoji {
+  font-size: 72rpx;
+  margin-bottom: 10rpx;
+  animation: pkBounce 0.5s ease-in-out infinite alternate;
+}
+
+.left-fighter .fighter-emoji {
+  animation-delay: 0s;
+}
+
+.right-fighter .fighter-emoji {
+  animation-delay: 0.25s;
+}
+
+@keyframes pkBounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-20rpx); }
+}
+
+.fighter-name {
+  font-size: 24rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+.vs-text {
+  font-size: 40rpx;
+  animation: vsFlash 0.3s ease-in-out infinite alternate;
+}
+
+@keyframes vsFlash {
+  0% { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 1; transform: scale(1.2); }
+}
+
+.pk-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.pk-loading-bar {
+  width: 300rpx;
+  height: 12rpx;
+  background: #f0f2f5;
+  border-radius: 6rpx;
+  overflow: hidden;
+}
+
+.pk-loading-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea, #764ba2);
+  border-radius: 6rpx;
+  animation: pkLoading 2s ease-in-out forwards;
+}
+
+@keyframes pkLoading {
+  0% { width: 0; }
+  100% { width: 100%; }
+}
+
+.pk-loading-text {
+  font-size: 26rpx;
+  color: #999;
+}
+
+/* PK结果 */
+.pk-result-box {
+  background: white;
+  border-radius: 32rpx;
+  padding: 50rpx 40rpx 40rpx;
+  width: 85%;
+  max-width: 600rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pk-result-header {
+  margin-bottom: 30rpx;
+}
+
+.result-icon {
+  font-size: 100rpx;
+}
+
+.win-icon {
+  animation: winBounce 0.6s ease-in-out;
+}
+
+@keyframes winBounce {
+  0% { transform: scale(0); }
+  50% { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+/* PK对比 */
+.pk-result-compare {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  width: 100%;
+  margin-bottom: 30rpx;
+}
+
+.compare-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.compare-avatar {
+  font-size: 56rpx;
+  margin-bottom: 8rpx;
+}
+
+.compare-name {
+  font-size: 24rpx;
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 4rpx;
+}
+
+.compare-level {
+  font-size: 20rpx;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.compare-title {
+  font-size: 18rpx;
+  color: #999;
+  margin-top: 2rpx;
+}
+
+.compare-power {
+  font-size: 18rpx;
+  color: #bbb;
+  margin-top: 4rpx;
+}
+
+.compare-vs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vs-label {
+  font-size: 32rpx;
+  font-weight: 800;
+  padding: 8rpx 20rpx;
+  border-radius: 12rpx;
+}
+
+.win-label {
+  color: #07c160;
+  background: #e8f5e9;
+}
+
+.lose-label {
+  color: #ff4757;
+  background: #ffebee;
+}
+
+.draw-label {
+  color: #ff9500;
+  background: #fff3e0;
+}
+
+/* 搞笑评语 */
+.pk-comment {
+  background: #f8f9fa;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  width: 100%;
+  margin-bottom: 30rpx;
+  border-left: 6rpx solid #667eea;
+}
+
+.comment-text {
+  font-size: 26rpx;
+  color: #444;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.pk-close-btn {
+  background: #667eea;
+  color: white;
+  font-size: 28rpx;
+  font-weight: 500;
+  padding: 18rpx 80rpx;
+  border-radius: 36rpx;
+}
+
+/* PK确认 */
+.pk-confirm-box {
+  background: white;
+  border-radius: 32rpx;
+  padding: 50rpx 40rpx 40rpx;
+  width: 85%;
+  max-width: 600rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pk-confirm-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 40rpx;
+}
+
+.pk-confirm-fighters {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40rpx;
+  margin-bottom: 30rpx;
+  width: 100%;
+}
+
+.confirm-fighter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.cf-emoji {
+  font-size: 60rpx;
+  margin-bottom: 10rpx;
+}
+
+.cf-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4rpx;
+}
+
+.cf-level {
+  font-size: 20rpx;
+  color: #667eea;
+}
+
+.confirm-vs {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #ff4757;
+}
+
+.pk-confirm-hint {
+  font-size: 22rpx;
+  color: #999;
+  text-align: center;
+  margin-bottom: 40rpx;
+  line-height: 1.6;
+}
+
+.pk-confirm-btns {
+  display: flex;
+  gap: 20rpx;
+  width: 100%;
+}
+
+.pk-cancel-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  background: #f0f2f5;
+  color: #666;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.pk-start-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+}

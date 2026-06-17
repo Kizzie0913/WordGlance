@@ -1,0 +1,164 @@
+<!--pages/pomodoro/pomodoro.wxml-->
+<view class="page">
+  <!--顶部-->
+  <view class="header">
+    <view class="header-row">
+      <view class="back-btn" bindtap="goBack">
+        <text class="back-icon">←</text>
+        <text class="back-text">返回</text>
+      </view>
+      <view class="header-center">
+        <text class="header-title">🍅 番茄钟</text>
+        <text class="header-sub">{{phaseName}}</text>
+      </view>
+      <view class="header-placeholder"></view>
+    </view>
+  </view>
+
+  <!--预设快捷选择-->
+  <view class="preset-row">
+    <view class="preset-tag {{preset==='25'?'active':''}}" bindtap="pickPreset" data-preset="25">
+      25分钟
+    </view>
+    <view class="preset-tag {{preset==='30'?'active':''}}" bindtap="pickPreset" data-preset="30">
+      30分钟
+    </view>
+    <view class="preset-tag {{preset==='45'?'active':''}}" bindtap="pickPreset" data-preset="45">
+      45分钟
+    </view>
+    <view class="preset-tag {{preset==='60'?'active':''}}" bindtap="pickPreset" data-preset="60">
+      60分钟
+    </view>
+    <view class="preset-tag setting-tag" bindtap="openSettings">
+      ⚙️ 设置
+    </view>
+  </view>
+
+  <!--计时器-->
+  <view class="timer-section">
+    <view class="ring-box">
+      <canvas type="2d" id="timerCanvas" class="timer-canvas"></canvas>
+      <view class="ring-center">
+        <text class="timer-time">{{displayTime}}</text>
+        <text class="timer-label">{{isRunning ? '进行中...' : (isPaused ? '已暂停' : '准备开始')}}</text>
+      </view>
+    </view>
+
+    <!--按钮-->
+    <view class="timer-controls">
+      <view class="ctrl-btn {{isRunning?'pause-btn':'start-btn'}}" bindtap="toggleTimer">
+        <text class="ctrl-icon">{{isRunning ? '⏸' : '▶️'}}</text>
+        <text class="ctrl-text">{{isRunning?'暂停':(isPaused?'继续':'开始')}}</text>
+      </view>
+      <view class="ctrl-btn reset-btn" bindtap="resetTimer" wx:if="{{isRunning||isPaused}}">
+        <text class="ctrl-icon">🔄</text>
+        <text class="ctrl-text">重置</text>
+      </view>
+      <view class="ctrl-btn skip-btn" bindtap="skipPhase" wx:if="{{isRunning}}">
+        <text class="ctrl-icon">⏭</text>
+        <text class="ctrl-text">跳过</text>
+      </view>
+    </view>
+  </view>
+
+  <!--今日完成-->
+  <view class="tomato-card card">
+    <view class="counter-header">
+      <text class="counter-label">🍅 今日已完成</text>
+      <text class="counter-total">{{todayCount}}/{{dailyGoal}}</text>
+    </view>
+    <view class="counter-tomatoes">
+      <text class="tomato-icon" wx:for="{{todayCount}}" wx:key="index">🍅</text>
+      <text class="counter-empty" wx:if="{{todayCount===0}}">还没有完成番茄钟，加油！</text>
+    </view>
+    <view class="counter-bar">
+      <view class="counter-bar-fill" style="width:{{goalPercent}}%;"></view>
+    </view>
+    <text class="counter-hint" wx:if="{{todayCount>0}}">累计完成 {{totalPomodoros}} 个番茄钟</text>
+  </view>
+
+  <!--今日目标-->
+  <view class="goal-card card">
+    <view class="goal-header">
+      <text class="goal-title">🎯 今日目标</text>
+      <view class="goal-adjust">
+        <view class="goal-btn" bindtap="adjustGoal" data-delta="-1">-</view>
+        <text class="goal-num">{{dailyGoal}}</text>
+        <view class="goal-btn" bindtap="adjustGoal" data-delta="1">+</view>
+      </view>
+    </view>
+  </view>
+
+  <!--提示-->
+  <view class="tips-card card" wx:if="{{showTip}}">
+    <text class="tip-text">{{tipText}}</text>
+  </view>
+
+  <!--时长编辑弹窗-->
+  <view class="modal-mask" wx:if="{{showDurationEditor}}" bindtap="closeDurationEditor">
+    <view class="modal-box" catchtap="preventBubble">
+      <text class="modal-title">设置{{editTypeLabel}}时长</text>
+      <view class="modal-stepper">
+        <view class="stepper-btn" bindtap="stepperChange" data-delta="-1">-1</view>
+        <view class="stepper-value">{{editMinutes}}</view>
+        <view class="stepper-btn" bindtap="stepperChange" data-delta="1">+1</view>
+      </view>
+      <view class="modal-actions">
+        <view class="modal-cancel" bindtap="closeDurationEditor">取消</view>
+        <view class="modal-confirm" bindtap="saveDuration">保存</view>
+      </view>
+    </view>
+  </view>
+
+  <!--设置弹窗-->
+  <view class="modal-mask" wx:if="{{showSettings}}" bindtap="closeSettings">
+    <view class="modal-box settings-box" catchtap="preventBubble">
+      <text class="modal-title">⚙️ 时长设置</text>
+      
+      <view class="setting-item">
+        <view class="setting-label">
+          <text class="setting-emoji">🎯</text>
+          <text>专注时长</text>
+        </view>
+        <view class="setting-value" bindtap="editSetting" data-type="work">
+          <text class="setting-num">{{workMin}}</text>
+          <text class="setting-unit">分钟</text>
+          <text class="setting-edit">✏️</text>
+        </view>
+      </view>
+
+      <view class="setting-item">
+        <view class="setting-label">
+          <text class="setting-emoji">☕</text>
+          <text>短休息时长</text>
+        </view>
+        <view class="setting-value" bindtap="editSetting" data-type="shortBreak">
+          <text class="setting-num">{{shortBreakMin}}</text>
+          <text class="setting-unit">分钟</text>
+          <text class="setting-edit">✏️</text>
+        </view>
+      </view>
+
+      <view class="setting-item">
+        <view class="setting-label">
+          <text class="setting-emoji">🌴</text>
+          <text>长休息时长</text>
+        </view>
+        <view class="setting-value" bindtap="editSetting" data-type="longBreak">
+          <text class="setting-num">{{longBreakMin}}</text>
+          <text class="setting-unit">分钟</text>
+          <text class="setting-edit">✏️</text>
+        </view>
+      </view>
+
+      <view class="settings-tip">
+        <text class="tip-icon">💡</text>
+        <text>每完成4个番茄钟后，自动进入长休息</text>
+      </view>
+
+      <view class="modal-actions" style="margin-top:40rpx;">
+        <view class="modal-confirm" bindtap="closeSettings" style="flex:1;">完成</view>
+      </view>
+    </view>
+  </view>
+</view>
