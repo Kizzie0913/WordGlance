@@ -1251,6 +1251,56 @@ app.post('/api/messages/:id/reply', async (req, res) => {
   }
 });
 
+// ========== 删除回复 API ==========
+app.delete('/api/messages/:msgId/replies/:replyId', async (req, res) => {
+  const userId = req.query.userId || req.body.userId;
+  const messageId = parseInt(req.params.msgId);
+  const replyId = parseInt(req.params.replyId);
+
+  if (!userId) return res.status(400).json({ error: '参数不完整' });
+
+  try {
+    let error = null;
+    await withWriteLock(data => {
+      const msg = data.messages.find(m => m.id === messageId);
+      if (!msg) {
+        error = { error: '留言不存在', status: 404 };
+        return;
+      }
+
+      if (!msg.replies || msg.replies.length === 0) {
+        error = { error: '没有回复', status: 404 };
+        return;
+      }
+
+      const replyIndex = msg.replies.findIndex(r => r.id === replyId);
+      if (replyIndex === -1) {
+        error = { error: '回复不存在', status: 404 };
+        return;
+      }
+
+      // 验证是否是回复的作者
+      if (msg.replies[replyIndex].userId !== userId) {
+        error = { error: '只能删除自己的回复', status: 403 };
+        return;
+      }
+
+      // 删除回复
+      msg.replies.splice(replyIndex, 1);
+      console.log('[DeleteReply] 回复已删除, 剩余回复数:', msg.replies.length);
+    });
+
+    if (error) {
+      return res.status(error.status).json({ error: error.error });
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[DeleteReply] 服务器错误:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // 修改获取留言接口，包含 replies
 // （已在上方 GET /api/messages 中返回，无需额外修改，replies 会随 message 一起返回）
 
