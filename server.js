@@ -236,6 +236,69 @@ app.get('/api/users/profile', async (req, res) => {
   }
 });
 
+// 同步用户最新数据（等级/经验/头衔）
+app.post('/api/users/sync', async (req, res) => {
+  const { userId, nickname, level, title, exp, avatar } = req.body;
+  if (!userId && !nickname) return res.status(400).json({ error: 'userId或nickname不能为空' });
+
+  try {
+    const data = await loadData();
+    let user = null;
+
+    if (userId) {
+      user = data.users.find(u => u.userId === userId);
+    }
+    if (!user && nickname) {
+      user = data.users.find(u => u.nickname === nickname);
+    }
+
+    if (user) {
+      if (level !== undefined) user.level = level;
+      if (title !== undefined) user.title = title;
+      if (exp !== undefined) user.exp = exp;
+      if (avatar !== undefined) user.avatar = avatar;
+      user.lastSync = new Date().toISOString();
+
+      // 同步更新 friends 表中该用户的数据
+      data.friends.forEach(f => {
+        if (f.user1Id === userId || f.user1 === nickname) {
+          f.user1Level = user.level;
+          f.user1Title = user.title;
+          f.user1Exp = user.exp;
+          if (avatar) f.user1Avatar = user.avatar;
+        }
+        if (f.user2Id === userId || f.user2 === nickname) {
+          f.user2Level = user.level;
+          f.user2Title = user.title;
+          f.user2Exp = user.exp;
+          if (avatar) f.user2Avatar = user.avatar;
+        }
+      });
+
+      await saveData(data);
+      return res.json({ success: true, user });
+    } else {
+      // 用户不存在，自动创建
+      const newUser = {
+        userId: userId || '',
+        nickname: nickname || '',
+        avatar: avatar || '🐱',
+        level: level || 1,
+        title: title || 'Noobslayer',
+        exp: exp || 0,
+        createdAt: new Date().toISOString(),
+        lastSync: new Date().toISOString()
+      };
+      data.users.push(newUser);
+      await saveData(data);
+      return res.json({ success: true, user: newUser, isNew: true });
+    }
+  } catch (err) {
+    console.error('Sync error:', err);
+    return res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // ========== 留言板 API ==========
 
 app.get('/api/messages', async (req, res) => {
@@ -586,13 +649,33 @@ app.get('/api/friends', async (req, res) => {
       }
     }).map(f => {
       const isUser1 = userId ? (f.user1Id === userId) : (f.user1 === nickname);
+      const friendNickname = isUser1 ? f.user2 : f.user1;
+      const friendUserId = isUser1 ? (f.user2Id || '') : (f.user1Id || '');
+
+      // 从 friends 表取基础数据
+      let friendLevel = isUser1 ? f.user2Level : f.user1Level;
+      let friendTitle = isUser1 ? f.user2Title : f.user1Title;
+      let friendExp = isUser1 ? f.user2Exp : f.user1Exp;
+      let friendAvatar = isUser1 ? f.user2Avatar : f.user1Avatar;
+
+      // 尝试从 users 表获取最新数据
+      const friendUser = data.users.find(u =>
+        (friendUserId && u.userId === friendUserId) || u.nickname === friendNickname
+      );
+      if (friendUser) {
+        friendLevel = friendUser.level || friendLevel;
+        friendTitle = friendUser.title || friendTitle;
+        friendExp = friendUser.exp !== undefined ? friendUser.exp : friendExp;
+        friendAvatar = friendUser.avatar || friendAvatar;
+      }
+
       return {
-        nickname: isUser1 ? f.user2 : f.user1,
-        userId: isUser1 ? (f.user2Id || '') : (f.user1Id || ''),
-        avatar: isUser1 ? f.user2Avatar : f.user1Avatar,
-        level: isUser1 ? f.user2Level : f.user1Level,
-        title: isUser1 ? f.user2Title : f.user1Title,
-        exp: isUser1 ? f.user2Exp : f.user1Exp,
+        nickname: friendNickname,
+        userId: friendUserId,
+        avatar: friendAvatar,
+        level: friendLevel,
+        title: friendTitle,
+        exp: friendExp,
         friendSince: f.createdAt
       };
     });
