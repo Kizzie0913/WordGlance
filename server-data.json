@@ -627,6 +627,16 @@
       "result": "win",
       "comment": "这场PK告诉我们：稳住，我们能赢 ✊",
       "createdAt": "2026-06-17T10:31:12.603Z"
+    },
+    {
+      "id": 1781692359924,
+      "challenger": "爸爸",
+      "challengerLevel": 1,
+      "defender": "Kizzie",
+      "defenderLevel": 5,
+      "result": "lose",
+      "comment": "微弱劣势落败，下次我准备好了 🔥",
+      "createdAt": "2026-06-17T10:32:39.924Z"
     }
   ]
 }
