@@ -215,6 +215,18 @@
       "recver": "Kizzie",
       "status": "accepted",
       "createdAt": "2026-06-17T08:20:57.564Z"
+    },
+    {
+      "id": 1781686860637,
+      "sender": "1",
+      "senderUserId": "u_1781672085220_uefx19",
+      "senderAvatar": "👽",
+      "senderLevel": 1,
+      "senderTitle": "Noobslayer",
+      "senderExp": 3,
+      "recver": "Kizzie",
+      "status": "pending",
+      "createdAt": "2026-06-17T09:01:00.637Z"
     }
   ],
   "pkRecords": [
