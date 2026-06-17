@@ -11,7 +11,19 @@
       "lastLogin": "2026-06-17T00:33:32.334Z"
     }
   ],
-  "messages": [],
+  "messages": [
+    {
+      "id": 1781656419134,
+      "userId": "u_1781646780240_ei18wk",
+      "nickname": "mia",
+      "avatar": "🎃",
+      "content": "hi",
+      "type": "text",
+      "likes": 0,
+      "likedUsers": [],
+      "createdAt": "2026-06-17T00:33:39.134Z"
+    }
+  ],
   "friends": [],
   "friendRequests": [],
   "pkRecords": []
