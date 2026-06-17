@@ -138,7 +138,18 @@
       "type": "text",
       "likes": 0,
       "likedUsers": [],
-      "createdAt": "2026-06-17T09:01:11.220Z"
+      "createdAt": "2026-06-17T09:01:11.220Z",
+      "replies": [
+        {
+          "id": 1781723950963,
+          "userId": "u_1781631383256_tff92l",
+          "nickname": "Kizzie",
+          "avatar": "🍜",
+          "content": "k",
+          "mentionUsers": [],
+          "createdAt": "2026-06-17T19:19:10.963Z"
+        }
+      ]
     },
     {
       "id": 1781690178710,
