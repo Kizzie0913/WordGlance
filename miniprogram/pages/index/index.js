@@ -259,9 +259,15 @@ Page({
           data: { code: code },
           timeout: 8000,
           success: function (res) {
-            if (!res.data || !res.data.openid) {
+            // 检查 HTTP 状态码
+            if (res.statusCode !== 200 || !res.data || !res.data.openid) {
               wx.hideLoading()
-              wx.showToast({ title: '微信登录失败', icon: 'none' })
+              console.error('换取 openid 失败:', res)
+              wx.showModal({
+                title: '绑定失败',
+                content: (res.data && res.data.error) || '微信登录失败，请重试',
+                showCancel: false
+              })
               return
             }
 
@@ -279,27 +285,33 @@ Page({
               timeout: 8000,
               success: function (bindRes) {
                 wx.hideLoading()
-                if (bindRes.data && bindRes.data.success) {
+                // 检查 HTTP 状态码
+                if (bindRes.statusCode === 200 && bindRes.data && bindRes.data.success) {
                   that.setData({ isWechatBound: true })
                   wx.showToast({ title: '微信账号绑定成功！', icon: 'success' })
-                } else if (bindRes.data && bindRes.data.error) {
+                } else {
+                  // 绑定失败，显示错误信息
+                  var errorMsg = '绑定失败，请重试'
+                  if (bindRes.data && bindRes.data.error) {
+                    errorMsg = bindRes.data.error
+                  }
                   wx.showModal({
                     title: '绑定失败',
-                    content: bindRes.data.error,
+                    content: errorMsg,
                     showCancel: false
                   })
-                } else {
-                  wx.showToast({ title: '绑定失败，请重试', icon: 'none' })
                 }
               },
-              fail: function () {
+              fail: function (err) {
                 wx.hideLoading()
+                console.error('绑定微信网络失败:', err)
                 wx.showToast({ title: '网络错误，请重试', icon: 'none' })
               }
             })
           },
-          fail: function () {
+          fail: function (err) {
             wx.hideLoading()
+            console.error('换取 openid 网络失败:', err)
             wx.showToast({ title: '网络错误，请重试', icon: 'none' })
           }
         })

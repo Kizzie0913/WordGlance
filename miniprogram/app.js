@@ -121,7 +121,7 @@ App({
 
   globalData: {
     userInfo: null
-  }),
+  },
 
   // 同步本地数据到服务器（退出前台时调用）
   syncDataToServer: function (callback) {

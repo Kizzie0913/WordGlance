@@ -333,10 +333,36 @@ Page({
           userId: userId,
           openid: openid
         },
-        fail: function () {
-          // 绑定失败不影响登录
+        success: function (res) {
+          wx.hideLoading()
+          if (res.statusCode === 200) {
+            console.log('微信账号绑定成功')
+            wx.showToast({
+              title: '微信账号绑定成功',
+              icon: 'success',
+              duration: 2000
+            })
+          } else {
+            console.error('微信绑定失败:', res.data)
+            wx.showToast({
+              title: '微信绑定失败: ' + (res.data.error || '未知错误'),
+              icon: 'none',
+              duration: 3000
+            })
+          }
+        },
+        fail: function (err) {
+          wx.hideLoading()
+          console.error('微信绑定网络失败:', err)
+          wx.showToast({
+            title: '网络错误，微信绑定失败',
+            icon: 'none',
+            duration: 3000
+          })
         }
       })
+    } else {
+      wx.hideLoading()
     }
 
     // 初始化经验值（如果还没有）
@@ -358,6 +384,8 @@ Page({
   bindWechatAccount: function (userId, code) {
     var that = this
 
+    wx.showLoading({ title: '绑定微信账号...' })
+
     wx.request({
       url: API_BASE + '/api/wechat/exchange-code',
       method: 'POST',
@@ -365,16 +393,32 @@ Page({
       data: { code: code },
       timeout: 8000,
       success: function (res) {
-        if (res.data && res.data.openid) {
+        if (res.statusCode === 200 && res.data && res.data.openid) {
           // 换取 openid 成功，绑定到用户账号
           that.doLocalLogin(userId, that.data.nickname, that.data.avatarEmoji, res.data.openid)
         } else {
-          // 换取 openid 失败，继续登录流程
+          // 换取 openid 失败
+          wx.hideLoading()
+          console.error('换取 openid 失败:', res.data)
+          wx.showToast({
+            title: '微信绑定失败: ' + (res.data.error || '未知错误'),
+            icon: 'none',
+            duration: 3000
+          })
+          // 继续登录流程（不绑定微信）
           that.doLocalLogin(userId, that.data.nickname, that.data.avatarEmoji, '')
         }
       },
-      fail: function () {
-        // 网络失败，继续登录流程
+      fail: function (err) {
+        // 网络失败
+        wx.hideLoading()
+        console.error('换取 openid 网络失败:', err)
+        wx.showToast({
+          title: '网络错误，微信绑定失败',
+          icon: 'none',
+          duration: 3000
+        })
+        // 继续登录流程（不绑定微信）
         that.doLocalLogin(userId, that.data.nickname, that.data.avatarEmoji, '')
       }
     })
