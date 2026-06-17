@@ -1,5 +1,16 @@
 {
-  "users": [],
+  "users": [
+    {
+      "userId": "u_1781646780240_ei18wk",
+      "nickname": "mia",
+      "avatar": "🎃",
+      "level": 1,
+      "title": "Noobslayer",
+      "exp": 0,
+      "createdAt": "2026-06-17T00:33:26.099Z",
+      "lastLogin": "2026-06-17T00:33:26.099Z"
+    }
+  ],
   "messages": [],
   "friends": [],
   "friendRequests": [],
