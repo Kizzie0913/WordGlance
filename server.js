@@ -322,6 +322,8 @@ app.get('/api/messages', async (req, res) => {
       } else {
         msgData.isLiked = false;
       }
+      // 不返回base64音频数据，节省流量
+      delete msgData.audioBase64;
       return msgData;
     });
 
@@ -431,22 +433,18 @@ app.post('/api/messages/voice', async (req, res) => {
   try {
     const data = await loadData();
     
-    // 生成唯一文件名
     const msgId = Date.now();
-    const audioFilename = `audio_${msgId}.mp3`;
-    const audioUrl = `/audio/${audioFilename}`;
+    const base64Data = audioData.replace(/^data:audio\/\w+;base64,/, '');
     
-    // 保存音频文件
+    // 同时保存到磁盘（缓存加速）和数据（持久化防丢失）
     const audioDir = path.join(__dirname, 'audio');
     if (!fs.existsSync(audioDir)) {
       fs.mkdirSync(audioDir, { recursive: true });
     }
-    
-    // 解码base64并保存
-    const base64Data = audioData.replace(/^data:audio\/\w+;base64,/, '');
+    const audioFilename = `audio_${msgId}.mp3`;
     fs.writeFileSync(path.join(audioDir, audioFilename), Buffer.from(base64Data, 'base64'));
     
-    // 创建留言记录
+    // 创建留言记录 - base64存在数据中，服务重启不会丢
     const newMsg = {
       id: msgId,
       userId: userId || '',
@@ -454,34 +452,70 @@ app.post('/api/messages/voice', async (req, res) => {
       avatar: avatar || '🐱',
       content: '[语音]',
       type: 'voice',
-      audioUrl: audioUrl,
+      audioUrl: `/api/messages/${msgId}/audio`,
+      audioBase64: base64Data,
       duration: duration || 0,
       likes: 0,
       likedUsers: [],
       createdAt: new Date().toISOString()
     };
     
-    data.messages.unshift(newMsg);
+    data.messages.push(newMsg);
     await saveData(data);
     
-    res.json({ success: true, message: newMsg });
+    // 返回给客户端时不带base64（节省流量）
+    const responseMsg = { ...newMsg };
+    delete responseMsg.audioBase64;
+    
+    res.json({ success: true, message: responseMsg });
   } catch (err) {
     console.error('Voice message error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// 提供音频文件
-app.get('/audio/:filename', (req, res) => {
-  const filename = req.params.filename;
-  const audioPath = path.join(__dirname, 'audio', filename);
+// 通过消息ID获取音频（优先磁盘缓存，回退base64数据）
+app.get('/api/messages/:id/audio', async (req, res) => {
+  const messageId = parseInt(req.params.id);
   
-  if (!fs.existsSync(audioPath)) {
-    return res.status(404).json({ error: '音频文件不存在' });
+  try {
+    // 先尝试磁盘缓存
+    const audioFilename = `audio_${messageId}.mp3`;
+    const audioPath = path.join(__dirname, 'audio', audioFilename);
+    
+    if (fs.existsSync(audioPath)) {
+      res.setHeader('Content-Type', 'audio/mpeg');
+      fs.createReadStream(audioPath).pipe(res);
+      return;
+    }
+    
+    // 磁盘没有，从数据中恢复
+    const data = await loadData();
+    const msg = data.messages.find(m => m.id === messageId);
+    
+    if (!msg || msg.type !== 'voice') {
+      return res.status(404).json({ error: '音频不存在' });
+    }
+    
+    if (!msg.audioBase64) {
+      // 兼容旧数据：尝试旧路径 /audio/audio_*.mp3
+      return res.status(404).json({ error: '音频数据已丢失' });
+    }
+    
+    // 从base64恢复文件到磁盘缓存
+    const audioDir = path.join(__dirname, 'audio');
+    if (!fs.existsSync(audioDir)) {
+      fs.mkdirSync(audioDir, { recursive: true });
+    }
+    const audioBuffer = Buffer.from(msg.audioBase64, 'base64');
+    fs.writeFileSync(audioPath, audioBuffer);
+    
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.send(audioBuffer);
+  } catch (err) {
+    console.error('Audio serve error:', err);
+    res.status(500).json({ error: '服务器错误' });
   }
-  
-  res.setHeader('Content-Type', 'audio/mpeg');
-  fs.createReadStream(audioPath).pipe(res);
 });
 
 // ========== 好友系统 API ==========
