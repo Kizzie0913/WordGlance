@@ -297,7 +297,7 @@ app.get('/api/users/profile', async (req, res) => {
       user = data.users.find(u => u.userId === userId);
     }
     if (!user && nickname) {
-      user = data.users.find(u => u.nickname === nickname);
+      user = data.users.find(u => u.nickname === nickname.trim());
     }
     
     if (!user) return res.status(404).json({ error: '用户不存在' });
