@@ -336,6 +336,29 @@ app.post('/api/messages/:id/like', async (req, res) => {
   }
 });
 
+// 删除留言
+app.delete('/api/messages/:id', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    const data = await loadData();
+    const messageId = parseInt(req.params.id);
+    const msg = data.messages.find(m => m.id === messageId);
+    
+    if (!msg) return res.status(404).json({ error: '留言不存在' });
+    if (msg.userId !== userId) return res.status(403).json({ error: '只能删除自己的留言' });
+    
+    data.messages = data.messages.filter(m => m.id !== messageId);
+    await saveData(data);
+    
+    res.json({ success: true, message: '留言已删除' });
+  } catch (err) {
+    console.error('Delete message error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
 // ========== 好友系统 API ==========
 
 app.post('/api/friends/request', async (req, res) => {
@@ -424,7 +447,15 @@ app.get('/api/friends/requests', async (req, res) => {
     const data = await loadData();
     const requests = data.friendRequests.filter(r => 
       r.recver === nickname && r.status === 'pending'
-    );
+    ).map(r => ({
+      id: r.id,
+      from: r.sender,
+      fromAvatar: r.senderAvatar,
+      fromLevel: r.senderLevel,
+      fromTitle: r.senderTitle,
+      fromExp: r.senderExp,
+      created_at: r.createdAt
+    }));
     res.json({ requests });
   } catch (err) {
     console.error('Friend requests error:', err);
