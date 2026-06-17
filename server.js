@@ -359,6 +359,68 @@ app.delete('/api/messages/:id', async (req, res) => {
   }
 });
 
+// 语音留言上传
+app.post('/api/messages/voice', async (req, res) => {
+  const { nickname, avatar, audioData, duration, userId } = req.body;
+  if (!audioData) return res.status(400).json({ error: '音频数据不能为空' });
+  if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
+
+  try {
+    const data = await loadData();
+    
+    // 生成唯一文件名
+    const msgId = Date.now();
+    const audioFilename = `audio_${msgId}.mp3`;
+    const audioUrl = `/audio/${audioFilename}`;
+    
+    // 保存音频文件
+    const audioDir = path.join(__dirname, 'audio');
+    if (!fs.existsSync(audioDir)) {
+      fs.mkdirSync(audioDir, { recursive: true });
+    }
+    
+    // 解码base64并保存
+    const base64Data = audioData.replace(/^data:audio\/\w+;base64,/, '');
+    fs.writeFileSync(path.join(audioDir, audioFilename), Buffer.from(base64Data, 'base64'));
+    
+    // 创建留言记录
+    const newMsg = {
+      id: msgId,
+      userId: userId || '',
+      nickname: nickname,
+      avatar: avatar || '🐱',
+      content: '[语音]',
+      type: 'voice',
+      audioUrl: audioUrl,
+      duration: duration || 0,
+      likes: 0,
+      likedUsers: [],
+      createdAt: new Date().toISOString()
+    };
+    
+    data.messages.unshift(newMsg);
+    await saveData(data);
+    
+    res.json({ success: true, message: newMsg });
+  } catch (err) {
+    console.error('Voice message error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 提供音频文件
+app.get('/audio/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const audioPath = path.join(__dirname, 'audio', filename);
+  
+  if (!fs.existsSync(audioPath)) {
+    return res.status(404).json({ error: '音频文件不存在' });
+  }
+  
+  res.setHeader('Content-Type', 'audio/mpeg');
+  fs.createReadStream(audioPath).pipe(res);
+});
+
 // ========== 好友系统 API ==========
 
 app.post('/api/friends/request', async (req, res) => {
