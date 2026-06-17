@@ -88,6 +88,18 @@
       "recver": "MIA",
       "status": "accepted",
       "createdAt": "2026-06-17T00:36:13.486Z"
+    },
+    {
+      "id": 1781657947784,
+      "sender": "Kizzie",
+      "senderUserId": "u_1781631383256_tff92l",
+      "senderAvatar": "🐬",
+      "senderLevel": 3,
+      "senderTitle": "Grammar Bandit",
+      "senderExp": 84,
+      "recver": "MIA",
+      "status": "pending",
+      "createdAt": "2026-06-17T00:59:07.784Z"
     }
   ],
   "pkRecords": [
