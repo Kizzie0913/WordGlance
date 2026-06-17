@@ -41,6 +41,11 @@ async function loadDataFromGitHub() {
       const content = Buffer.from(file.content, 'base64').toString('utf8');
       const data = JSON.parse(content);
       
+      // 数据迁移：确保新字段存在（向后兼容）
+      if (!data.corpus) data.corpus = [];
+      if (!data.pomodoroSessions) data.pomodoroSessions = [];
+      if (!data.corpus) data.corpus = [];
+      
       fs.writeFileSync(BACKUP_FILE, JSON.stringify(data, null, 2), 'utf8');
       fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
       
@@ -48,7 +53,7 @@ async function loadDataFromGitHub() {
       return { data, sha: file.sha };
     } else if (response.status === 404) {
       console.log('server-data.json 不存在，创建新的...');
-      const initialData = { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [] };
+      const initialData = { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [], corpus: [], pomodoroSessions: [] };
       const sha = await saveDataToGitHub(initialData, null);
       return { data: initialData, sha };
     } else {
@@ -68,7 +73,7 @@ function loadFromLocal() {
     return { data: JSON.parse(raw), sha: null };
   }
   console.log('使用空数据');
-  return { data: { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [] }, sha: null };
+  return { data: { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [], corpus: [], pomodoroSessions: [] }, sha: null };
 }
 
 // 保存数据到 GitHub
@@ -1022,6 +1027,499 @@ function getPkComment(myLevel, friendLevel, iWin) {
     return pool[Math.floor(Math.random() * pool.length)];
   }
 }
+
+// ========== 语料库 API（带场景标签）==========
+
+// 场景关键词映射
+const SCENE_KEYWORDS = {
+  '出行': ['airport','train','station','taxi','bus','hotel','trip','travel','flight','subway','metro','go to','leave','arrive','depart','destination','ticket','passport','visa','luggage','suitcase','boarding','gate','terminal'],
+  '购物': ['shop','store','buy','sell','price','cost','cheap','expensive','market','mall','cart','cash','card','pay','discount','sale','bargain','try on','size','color','refund','receipt'],
+  '校园': ['school','class','teacher','student','campus','dorm','library','exam','test','homework','assignment','lecture','course','degree','professor','classmate','dormitory','cafeteria','graduation','semester'],
+  '餐厅': ['restaurant','food','menu','order','dish','eat','hungry','breakfast','lunch','dinner','waiter','chef','reservation','table','delicious','taste','spicy','sweet','bill','tip','drink'],
+  '医院': ['hospital','doctor','sick','pain','medicine','health','clinic','nurse','fever','cold','headache','prescription','treatment','symptom','injury','emergency','surgery','recover','appointment'],
+  '工作': ['work','job','office','meeting','boss','colleague','career','salary','project','deadline','interview','resume','promotion','company','business','client','report','presentation','overtime'],
+  '家庭': ['family','home','parent','mother','father','brother','sister','husband','wife','child','kid','baby','grandma','grandpa','relative','dinner','kitchen','living room','bedroom','garden'],
+  '社交': ['friend','party','meet','talk','chat','social','hang out','date','invite','birthday','celebrate','gift','surprise','together','weekend','holiday','travel together','visit'],
+  '天气': ['weather','rain','snow','sunny','cloudy','wind','storm','temperature','hot','cold','warm','cool','forecast','umbrella','coat','sweater'],
+  '运动': ['sport','run','swim','gym','ball','game','match','win','lose','coach','team','practice','exercise','fitness','marathon','cycling','yoga','muscle','workout']
+};
+
+// 自动识别场景
+function detectScene(text) {
+  if (!text) return '其他';
+  const lower = text.toLowerCase();
+  let bestScene = '其他';
+  let bestScore = 0;
+  for (const [scene, keywords] of Object.entries(SCENE_KEYWORDS)) {
+    let score = 0;
+    for (const kw of keywords) {
+      if (lower.includes(kw)) score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestScene = scene;
+    }
+  }
+  return bestScore > 0 ? bestScene : '其他';
+}
+
+// 获取语料列表（支持场景筛选）
+app.get('/api/corpus', async (req, res) => {
+  const { userId, scene, search } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    const data = await loadData();
+    let list = data.corpus.filter(c => c.userId === userId);
+    if (scene && scene !== '全部') {
+      list = list.filter(c => c.scene === scene);
+    }
+    if (search) {
+      const s = search.toLowerCase();
+      list = list.filter(c => c.sentence.toLowerCase().includes(s) || (c.translation && c.translation.toLowerCase().includes(s)));
+    }
+    res.json({ corpus: list });
+  } catch (err) {
+    console.error('Corpus list error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 添加语料（自动识别场景）
+app.post('/api/corpus', async (req, res) => {
+  const { userId, nickname, sentence, translation, source } = req.body;
+  if (!userId || !sentence) return res.status(400).json({ error: '参数不完整' });
+
+  try {
+    const scene = detectScene(sentence + ' ' + (translation || ''));
+    const newItem = {
+      id: Date.now(),
+      userId,
+      nickname: nickname || '',
+      sentence,
+      translation: translation || '',
+      scene,
+      source: source || '手动添加',
+      createdAt: new Date().toISOString()
+    };
+
+    await withWriteLock(data => {
+      data.corpus.push(newItem);
+    });
+
+    res.json({ success: true, item: newItem });
+  } catch (err) {
+    console.error('Add corpus error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 删除语料
+app.delete('/api/corpus/:id', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    const itemId = parseInt(req.params.id);
+    let result = null;
+
+    await withWriteLock(data => {
+      const item = data.corpus.find(c => c.id === itemId);
+      if (!item) { result = { error: '语料不存在', status: 404 }; return; }
+      if (item.userId !== userId) { result = { error: '只能删除自己的语料', status: 403 }; return; }
+      data.corpus = data.corpus.filter(c => c.id !== itemId);
+      result = { deleted: true };
+    });
+
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete corpus error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取所有场景标签
+app.get('/api/corpus/scenes', async (req, res) => {
+  try {
+    const data = await loadData();
+    const scenes = [...new Set(data.corpus.map(c => c.scene))];
+    res.json({ scenes: ['全部', ...scenes.sort()] });
+  } catch (err) {
+    console.error('Corpus scenes error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 番茄钟学习时长同步 API ==========
+
+app.post('/api/pomodoro/sync', async (req, res) => {
+  const { userId, nickname, duration, type, completedAt } = req.body;
+  if (!userId || !duration) return res.status(400).json({ error: '参数不完整' });
+
+  try {
+    const session = {
+      id: Date.now(),
+      userId,
+      nickname: nickname || '',
+      duration: parseInt(duration), // 秒
+      type: type || 'focus', // focus / shortBreak / longBreak
+      completedAt: completedAt || new Date().toISOString()
+    };
+
+    await withWriteLock(data => {
+      data.pomodoroSessions.push(session);
+    });
+
+    res.json({ success: true, session });
+  } catch (err) {
+    console.error('Pomodoro sync error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 获取用户番茄钟记录
+app.get('/api/pomodoro/sessions', async (req, res) => {
+  const { userId, startDate, endDate } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    const data = await loadData();
+    let sessions = data.pomodoroSessions.filter(s => s.userId === userId);
+    if (startDate) sessions = sessions.filter(s => s.completedAt >= startDate);
+    if (endDate) sessions = sessions.filter(s => s.completedAt <= endDate);
+    res.json({ sessions });
+  } catch (err) {
+    console.error('Pomodoro sessions error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 留言板回复&@ API ==========
+
+// 回复留言
+app.post('/api/messages/:id/reply', async (req, res) => {
+  const { userId, nickname, avatar, content, mentionUsers } = req.body;
+  if (!userId || !content) return res.status(400).json({ error: '参数不完整' });
+
+  try {
+    const messageId = parseInt(req.params.id);
+    let result = null;
+
+    await withWriteLock(data => {
+      const msg = data.messages.find(m => m.id === messageId);
+      if (!msg) { result = { error: '留言不存在', status: 404 }; return; }
+
+      if (!msg.replies) msg.replies = [];
+
+      const reply = {
+        id: Date.now(),
+        userId,
+        nickname: nickname || '',
+        avatar: avatar || '🐱',
+        content,
+        mentionUsers: mentionUsers || [], // @的好友列表
+        createdAt: new Date().toISOString()
+      };
+
+      msg.replies.push(reply);
+      result = { reply };
+    });
+
+    if (result && result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+    res.json({ success: true, reply: result.reply });
+  } catch (err) {
+    console.error('Reply error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 修改获取留言接口，包含 replies
+// （已在上方 GET /api/messages 中返回，无需额外修改，replies 会随 message 一起返回）
+
+// ========== 每周学习报告 API ==========
+
+app.get('/api/reports/weekly', async (req, res) => {
+  const { userId, nickname } = req.query;
+  if (!userId) return res.status(400).json({ error: 'userId不能为空' });
+
+  try {
+    const data = await loadData();
+
+    // 计算本周时间范围
+    const now = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay() + 1); // 本周一
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
+
+    const ws = weekStart.toISOString();
+    const we = weekEnd.toISOString();
+
+    // 1. 番茄钟学习时长
+    const weekSessions = data.pomodoroSessions.filter(s =>
+      s.userId === userId && s.completedAt >= ws && s.completedAt < we && s.type === 'focus'
+    );
+    const totalFocusSeconds = weekSessions.reduce((sum, s) => sum + s.duration, 0);
+    const totalFocusMinutes = Math.round(totalFocusSeconds / 60);
+    const pomodoroCount = weekSessions.length;
+
+    // 2. 语料训练量
+    const weekCorpus = data.corpus.filter(c =>
+      c.userId === userId && c.createdAt >= ws && c.createdAt < we
+    );
+    const corpusCount = weekCorpus.length;
+    const corpusByScene = {};
+    weekCorpus.forEach(c => {
+      corpusByScene[c.scene] = (corpusByScene[c.scene] || 0) + 1;
+    });
+
+    // 3. PK 战绩
+    const weekPk = data.pkRecords.filter(r =>
+      (r.challenger === nickname || r.defender === nickname) &&
+      r.createdAt >= ws && r.createdAt < we
+    );
+    const pkTotal = weekPk.length;
+    const pkWins = weekPk.filter(r =>
+      (r.challenger === nickname && r.result === 'win') ||
+      (r.defender === nickname && r.result === 'lose')
+    ).length;
+    const pkDraws = weekPk.filter(r => r.result === 'draw').length;
+    const pkLosses = pkTotal - pkWins - pkDraws;
+    const pkWinRate = pkTotal > 0 ? Math.round(pkWins / pkTotal * 100) : 0;
+
+    // 4. 做题记录（从 corpus 里找 practice 类型的，或从小程序本地获取）
+    // 这里返回语料数据，做题正确率由前端从本地 practice 记录计算
+
+    res.json({
+      success: true,
+      report: {
+        weekStart: ws,
+        weekEnd: we,
+        pomodoro: {
+          totalMinutes: totalFocusMinutes,
+          sessionCount: pomodoroCount,
+          dailyMinutes: Array(7).fill(0) // 前端可自行统计每日分布
+        },
+        corpus: {
+          totalCount: corpusCount,
+          byScene: corpusByScene
+        },
+        pk: {
+          total: pkTotal,
+          wins: pkWins,
+          draws: pkDraws,
+          losses: pkLosses,
+          winRate: pkWinRate
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Weekly report error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 句式优化工具 API（规则版）==========
+
+const SENTENCE_PATTERNS = [
+  {
+    pattern: /I am very (.*)/i,
+    chinglish: 'I am very [adj]',
+    standard: 'I am very [adj]',
+    native: (m) => `I'm absolutely ${m[1]} / I'm really ${m[1]}`
+  },
+  {
+    pattern: /I think (.*)/i,
+    chinglish: 'I think...',
+    standard: 'I think...',
+    native: (m) => `In my opinion, ... / Personally, I believe that ...`
+  },
+  {
+    pattern: /How are you\?/i,
+    chinglish: 'How are you?',
+    standard: 'How are you?',
+    native: () => `How's it going? / How have you been? / What's up?`
+  },
+  {
+    pattern: /I want to (.*)/i,
+    chinglish: 'I want to [verb]',
+    standard: 'I want to [verb]',
+    native: (m) => `I'd like to ${m[1]} / I'm planning to ${m[1]} / I'm hoping to ${m[1]}`
+  },
+  {
+    pattern: /It's (.*) for me to (.*)/i,
+    chinglish: 'It\'s [adj] for me to [verb]',
+    standard: 'It\'s [adj] for me to [verb]',
+    native: (m) => `I find it ${m[1]} to ${m[2]} / It takes me effort to ${m[2]}`
+  }
+];
+
+app.post('/api/tools/sentence-optimize', async (req, res) => {
+  const { sentence } = req.body;
+  if (!sentence) return res.status(400).json({ error: '句子不能为空' });
+
+  try {
+    const s = sentence.trim();
+    let match = null;
+    let matchedPattern = null;
+
+    for (const p of SENTENCE_PATTERNS) {
+      const m = s.match(p.pattern);
+      if (m) {
+        match = m;
+        matchedPattern = p;
+        break;
+      }
+    }
+
+    if (matchedPattern) {
+      res.json({
+        success: true,
+        result: {
+          original: s,
+          chinglish: matchedPattern.chinglish,
+          standard: matchedPattern.standard,
+          native: typeof matchedPattern.native === 'function' ? matchedPattern.native(match) : matchedPattern.native,
+          explanation: '以上是对比结果，native 表达更地道自然。'
+        }
+      });
+    } else {
+      // 没有匹配到模式，返回通用建议
+      res.json({
+        success: true,
+        result: {
+          original: s,
+          chinglish: s,
+          standard: s,
+          native: `建议：尝试用更丰富的动词替换 be 动词；用具体表达替换 very + adj；用从句提升句式复杂度。`,
+          explanation: '未匹配到特定句式，以上是通用优化建议。'
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Sentence optimize error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 场景对话生成 API（模板版）==========
+
+const SCENE_DIALOG_TEMPLATES = {
+  '出行': [
+    { role: 'A', text: 'Hi! Are you ready for the trip?', zh: '嗨！你准备好去旅行了吗？' },
+    { role: 'B', text: 'Yes! I\'ve packed my suitcase.', zh: '是的！我已经收拾好行李箱了。' },
+    { role: 'A', text: 'Did you book the hotel?', zh: '你订酒店了吗？' },
+    { role: 'B', text: 'Yes, I booked it online last week.', zh: '订了，我上周在网上订好了。' },
+    { role: 'A', text: 'What time is our flight?', zh: '我们的航班是几点？' },
+    { role: 'B', text: 'It\'s at 9 AM. We need to arrive 2 hours early.', zh: '早上9点。我们需要提前2小时到机场。' }
+  ],
+  '购物': [
+    { role: 'A', text: 'Can I help you find something?', zh: '需要帮你找什么吗？' },
+    { role: 'B', text: 'I\'m looking for a jacket. Do you have this in blue?', zh: '我想找一件夹克。这个有蓝色的吗？' },
+    { role: 'A', text: 'Yes, let me check the size for you.', zh: '有，我帮你看看尺码。' },
+    { role: 'B', text: 'How much is it?', zh: '多少钱？' },
+    { role: 'A', text: 'It\'s $80, but it\'s on sale today for $60.', zh: '$80，但今天打折只要$60。' },
+    { role: 'B', text: 'Great! I\'ll take it.', zh: '太好了！我买了。' }
+  ],
+  '校园': [
+    { role: 'A', text: 'Did you finish the homework?', zh: '你作业做完了吗？' },
+    { role: 'B', text: 'Not yet. The assignment is so hard!', zh: '还没，这个作业太难了！' },
+    { role: 'A', text: 'Which class is it for?', zh: '是哪门课的？' },
+    { role: 'B', text: 'It\'s for Professor Li\'s lecture.', zh: '是李教授的课。' },
+    { role: 'A', text: 'Want to study together at the library?', zh: '想去图书馆一起学习吗？' },
+    { role: 'B', text: 'Sure! Let\'s meet at 7 PM.', zh: '好啊！我们晚上7点见。' }
+  ],
+  '餐厅': [
+    { role: 'A', text: 'Welcome! Do you have a reservation?', zh: '欢迎！你有预订吗？' },
+    { role: 'B', text: 'Yes, under the name Wang.', zh: '有，名字是王。' },
+    { role: 'A', text: 'Follow me, please. Here\'s the menu.', zh: '请跟我来。这是菜单。' },
+    { role: 'B', text: 'What do you recommend?', zh: '你有什么推荐？' },
+    { role: 'A', text: 'The steak is very popular. And the soup is homemade.', zh: '牛排很受欢迎。汤是店主手工做的。' },
+    { role: 'B', text: 'I\'ll have the steak, medium rare.', zh: '我要牛排，三分熟。' }
+  ],
+  '医院': [
+    { role: 'A', text: 'What seems to be the problem?', zh: '你哪里不舒服？' },
+    { role: 'B', text: 'I have a fever and a sore throat.', zh: '我发烧而且喉咙痛。' },
+    { role: 'A', text: 'Let me check your temperature.', zh: '我帮你量一下体温。' },
+    { role: 'B', text: 'Is it serious?', zh: '严重吗？' },
+    { role: 'A', text: 'It\'s just a cold. Take this medicine twice a day.', zh: '只是感冒。这个药一天吃两次。' },
+    { role: 'B', text: 'Thank you, doctor.', zh: '谢谢你，医生。' }
+  ],
+  '工作': [
+    { role: 'A', text: 'Did you finish the report?', zh: '你报告写完了吗？' },
+    { role: 'B', text: 'Almost. I need one more hour.', zh: '快了，还需要一小时。' },
+    { role: 'A', text: 'The meeting starts at 2 PM.', zh: '会议下午2点开始。' },
+    { role: 'B', text: 'I\'ll be there. Thanks for reminding me.', zh: '我会去的，谢谢提醒。' },
+    { role: 'A', text: 'You\'ve been working hard lately.', zh: '你最近工作很努力。' },
+    { role: 'B', text: 'Thanks. The project deadline is next week.', zh: '谢谢，项目截止日期是下周。' }
+  ],
+  '家庭': [
+    { role: 'A', text: 'What should we have for dinner?', zh: '晚饭我们吃什么？' },
+    { role: 'B', text: 'How about noodles?', zh: '面条怎么样？' },
+    { role: 'A', text: 'Sounds good. I\'ll cook.', zh: '听起来不错，我来做。' },
+    { role: 'B', text: 'Can I help?', zh: '我能帮忙吗？' },
+    { role: 'A', text: 'Sure, please wash the vegetables.', zh: '当然，请洗一下菜。' },
+    { role: 'B', text: 'OK! Dinner will be ready soon.', zh: '好！晚饭很快就好了。' }
+  ],
+  '社交': [
+    { role: 'A', text: 'Are you coming to the party on Saturday?', zh: '你周六来参加派对吗？' },
+    { role: 'B', text: 'Yes! What should I bring?', zh: '来！我应该带什么？' },
+    { role: 'A', text: 'Just bring yourself! And maybe some drinks.', zh: '人来就好！也许可以带点饮料。' },
+    { role: 'B', text: 'What time does it start?', zh: '几点开始？' },
+    { role: 'A', text: 'Around 7 PM. Don\'t be late!', zh: '大概晚上7点。别迟到！' },
+    { role: 'B', text: 'I won\'t. See you then!', zh: '不会的，到时候见！' }
+  ]
+};
+
+app.post('/api/tools/scene-dialog', async (req, res) => {
+  const { scene, corpusItems } = req.body;
+  if (!scene) return res.status(400).json({ error: '场景不能为空' });
+
+  try {
+    // 使用模板生成对话
+    const template = SCENE_DIALOG_TEMPLATES[scene] || SCENE_DIALOG_TEMPLATES['出行'];
+
+    let dialog = template.map(line => ({
+      role: line.role,
+      text: line.text,
+      zh: line.zh
+    }));
+
+    // 如果有语料句子，替换部分对话内容
+    if (corpusItems && corpusItems.length > 0) {
+      const sentences = corpusItems.filter(c => c.sentence).map(c => c.sentence);
+      if (sentences.length >= 2) {
+        dialog[1].text = sentences[0];
+        dialog[3].text = sentences[1];
+      }
+    }
+
+    res.json({
+      success: true,
+      dialog: {
+        scene,
+        lines: dialog,
+        tip: '跟读每一句，注意发音和语调！'
+      }
+    });
+  } catch (err) {
+    console.error('Scene dialog error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 获取所有场景标签（用于对话生成）==========
+app.get('/api/tools/scene-list', async (req, res) => {
+  res.json({
+    scenes: Object.keys(SCENE_DIALOG_TEMPLATES)
+  });
+});
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`WordGlance 后端运行在端口 ${PORT}`);
