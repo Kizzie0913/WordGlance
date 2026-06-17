@@ -3,6 +3,7 @@
 // 老用户：只显示欢迎回来 + 登录按钮（不允许修改资料）
 // 新用户：设置昵称 + 随机头像 + 确认登录
 // 登录后修改资料请到首页资料编辑
+// 登录时自动绑定微信账号
 
 var storage = require('../../utils/storage.js')
 var levelSystem = require('../../utils/levelSystem.js')
@@ -103,44 +104,61 @@ Page({
 
       wx.showLoading({ title: '登录中...' })
 
-      // 同步到服务器（更新最后登录时间）
-      wx.request({
-        url: API_BASE + '/api/users/register',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: {
-          userId: userId,
-          nickname: nickname,
-          avatar: avatarEmoji
-        },
-        success: function (res) {
-          wx.hideLoading()
-          if (res.statusCode === 409) {
-            // 昵称被其他人占用（极小概率）
-            wx.showModal({
-              title: '昵称被占用',
-              content: '你的昵称已被其他用户使用，请联系客服或重新注册',
-              confirmText: '重新注册',
-              success: function (modalRes) {
-                if (modalRes.confirm) {
-                  // 清除旧userId，当作新用户
-                  wx.removeStorageSync('persistent_user_id')
-                  that.setData({
-                    isReturningUser: false,
-                    nickname: '',
-                    avatarEmoji: levelSystem.getRandomAvatar()
-                  })
-                }
+      // 获取微信 code，用于绑定账号
+      wx.login({
+        success: function (loginRes) {
+          var code = loginRes.code || ''
+
+          // 同步到服务器（更新最后登录时间）
+          wx.request({
+            url: API_BASE + '/api/users/register',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: {
+              userId: userId,
+              nickname: nickname,
+              avatar: avatarEmoji
+            },
+            success: function (res) {
+              wx.hideLoading()
+              if (res.statusCode === 409) {
+                // 昵称被其他人占用（极小概率）
+                wx.showModal({
+                  title: '昵称被占用',
+                  content: '你的昵称已被其他用户使用，请联系客服或重新注册',
+                  confirmText: '重新注册',
+                  success: function (modalRes) {
+                    if (modalRes.confirm) {
+                      // 清除旧userId，当作新用户
+                      wx.removeStorageSync('persistent_user_id')
+                      that.setData({
+                        isReturningUser: false,
+                        nickname: '',
+                        avatarEmoji: levelSystem.getRandomAvatar()
+                      })
+                    }
+                  }
+                })
+                return
               }
-            })
-            return
-          }
-          that.doLocalLogin(userId, nickname, avatarEmoji)
+
+              // 登录成功，如果有 code，绑定微信账号
+              if (code) {
+                that.bindWechatAccount(userId, code)
+              } else {
+                that.doLocalLogin(userId, nickname, avatarEmoji, '')
+              }
+            },
+            fail: function () {
+              wx.hideLoading()
+              // 离线模式：仍然允许登录
+              that.doLocalLogin(userId, nickname, avatarEmoji, '')
+            }
+          })
         },
         fail: function () {
-          wx.hideLoading()
-          // 离线模式：仍然允许登录
-          that.doLocalLogin(userId, nickname, avatarEmoji)
+          // 获取 code 失败，继续登录流程
+          that.loginWithoutWechat(userId, nickname, avatarEmoji)
         }
       })
       return
@@ -211,43 +229,88 @@ Page({
     })
 
     function doRegister() {
-      wx.showLoading({ title: '登录中...' })
+      // 获取微信 code，用于绑定账号
+      wx.login({
+        success: function (loginRes) {
+          var code = loginRes.code || ''
 
-      wx.request({
-        url: API_BASE + '/api/users/register',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: {
-          userId: userId,
-          nickname: nickname.trim(),
-          avatar: avatarEmoji
-        },
-        success: function (res) {
-          wx.hideLoading()
-          if (res.statusCode === 409) {
-            // 昵称已被使用
-            wx.showModal({
-              title: '昵称不可用',
-              content: (res.data && res.data.error) || '该昵称已被使用，请换一个独特的昵称',
-              showCancel: false,
-              confirmText: '好的'
-            })
-            return
-          }
+          wx.showLoading({ title: '登录中...' })
 
-          that.doLocalLogin(userId, nickname.trim(), avatarEmoji)
+          wx.request({
+            url: API_BASE + '/api/users/register',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: {
+              userId: userId,
+              nickname: nickname.trim(),
+              avatar: avatarEmoji
+            },
+            success: function (res) {
+              wx.hideLoading()
+              if (res.statusCode === 409) {
+                // 昵称已被使用
+                wx.showModal({
+                  title: '昵称不可用',
+                  content: (res.data && res.data.error) || '该昵称已被使用，请换一个独特的昵称',
+                  showCancel: false,
+                  confirmText: '好的'
+                })
+                return
+              }
+
+              // 注册成功，如果有 code，绑定微信账号
+              if (code) {
+                that.bindWechatAccount(userId, code)
+              } else {
+                that.doLocalLogin(userId, nickname.trim(), avatarEmoji, '')
+              }
+            },
+            fail: function () {
+              wx.hideLoading()
+              // 网络失败也允许本地登录（离线模式）
+              that.doLocalLogin(userId, nickname.trim(), avatarEmoji, '')
+            }
+          })
         },
         fail: function () {
-          wx.hideLoading()
-          // 网络失败也允许本地登录（离线模式）
-          that.doLocalLogin(userId, nickname.trim(), avatarEmoji)
+          // 获取 code 失败，继续注册流程
+          wx.showLoading({ title: '登录中...' })
+
+          wx.request({
+            url: API_BASE + '/api/users/register',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: {
+              userId: userId,
+              nickname: nickname.trim(),
+              avatar: avatarEmoji
+            },
+            success: function (res) {
+              wx.hideLoading()
+              if (res.statusCode === 409) {
+                wx.showModal({
+                  title: '昵称不可用',
+                  content: (res.data && res.data.error) || '该昵称已被使用，请换一个独特的昵称',
+                  showCancel: false,
+                  confirmText: '好的'
+                })
+                return
+              }
+
+              that.doLocalLogin(userId, nickname.trim(), avatarEmoji, '')
+            },
+            fail: function () {
+              wx.hideLoading()
+              that.doLocalLogin(userId, nickname.trim(), avatarEmoji, '')
+            }
+          })
         }
       })
     }
   },
 
   // 本地登录（公共逻辑）
-  doLocalLogin: function (userId, nickname, avatarEmoji) {
+  doLocalLogin: function (userId, nickname, avatarEmoji, openid) {
     var userInfo = {
       userId: userId,
       nickName: nickname,
@@ -260,6 +323,22 @@ Page({
     // 同时更新内存，防止存储失败
     getApp().globalData.userInfo = userInfo
 
+    // 如果有 openid，绑定到用户账号
+    if (openid) {
+      wx.request({
+        url: API_BASE + '/api/wechat/bind',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: {
+          userId: userId,
+          openid: openid
+        },
+        fail: function () {
+          // 绑定失败不影响登录
+        }
+      })
+    }
+
     // 初始化经验值（如果还没有）
     if (!storage.getExp() && storage.getExp() !== 0) {
       storage.setExp(0)
@@ -269,6 +348,76 @@ Page({
     setTimeout(function () {
       wx.switchTab({ url: '/pages/index/index' })
     }, 1200)
+  },
+
+  // 绑定微信账号
+  bindWechatAccount: function (userId, code) {
+    var that = this
+
+    wx.request({
+      url: API_BASE + '/api/wechat/exchange-code',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: { code: code },
+      timeout: 8000,
+      success: function (res) {
+        if (res.data && res.data.openid) {
+          // 换取 openid 成功，绑定到用户账号
+          that.doLocalLogin(userId, that.data.nickname, that.data.avatarEmoji, res.data.openid)
+        } else {
+          // 换取 openid 失败，继续登录流程
+          that.doLocalLogin(userId, that.data.nickname, that.data.avatarEmoji, '')
+        }
+      },
+      fail: function () {
+        // 网络失败，继续登录流程
+        that.doLocalLogin(userId, that.data.nickname, that.data.avatarEmoji, '')
+      }
+    })
+  },
+
+  // 没有微信 code 时的登录
+  loginWithoutWechat: function (userId, nickname, avatarEmoji) {
+    var that = this
+
+    wx.showLoading({ title: '登录中...' })
+
+    wx.request({
+      url: API_BASE + '/api/users/register',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: {
+        userId: userId,
+        nickname: nickname,
+        avatar: avatarEmoji
+      },
+      success: function (res) {
+        wx.hideLoading()
+        if (res.statusCode === 409) {
+          wx.showModal({
+            title: '昵称被占用',
+            content: '你的昵称已被其他用户使用，请联系客服或重新注册',
+            confirmText: '重新注册',
+            success: function (modalRes) {
+              if (modalRes.confirm) {
+                wx.removeStorageSync('persistent_user_id')
+                that.setData({
+                  isReturningUser: false,
+                  nickname: '',
+                  avatarEmoji: levelSystem.getRandomAvatar()
+                })
+              }
+            }
+          })
+          return
+        }
+        that.doLocalLogin(userId, nickname, avatarEmoji, '')
+      },
+      fail: function () {
+        wx.hideLoading()
+        that.doLocalLogin(userId, nickname, avatarEmoji, '')
+      }
+    })
   },
 
   // 隐私协议

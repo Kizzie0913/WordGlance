@@ -8,6 +8,10 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// 微信小程序配置
+const WECHAT_APPID = process.env.WECHAT_APPID || 'wxbb5fb5ae76aacee3';
+const WECHAT_SECRET = process.env.WECHAT_SECRET || '';
+
 // GitHub 配置（Token 通过环境变量 GITHUB_TOKEN 传入，不在代码中写死）
 const GITHUB_REPO = 'Kizzie0913/WordGlance';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
@@ -209,7 +213,7 @@ async function withWriteLock(modifyFn) {
 // ========== 用户资料 API ==========
 
 app.post('/api/users/register', async (req, res) => {
-  const { userId, nickname, avatar } = req.body;
+  const { userId, nickname, avatar, openid } = req.body;
   if (!userId || !nickname) return res.status(400).json({ error: '参数不完整' });
 
   const trimmedName = nickname.trim();
@@ -230,6 +234,7 @@ app.post('/api/users/register', async (req, res) => {
       if (user) {
         user.nickname = trimmedName;
         if (avatar) user.avatar = avatar;
+        if (openid) user.openid = openid;
         user.lastLogin = new Date().toISOString();
 
         data.messages.forEach(msg => {
@@ -265,6 +270,7 @@ app.post('/api/users/register', async (req, res) => {
           userId: userId,
           nickname: trimmedName,
           avatar: avatar || '🐱',
+          openid: openid || '',
           level: 1,
           title: 'Noobslayer',
           exp: 0,
@@ -304,6 +310,91 @@ app.get('/api/users/profile', async (req, res) => {
     res.json({ user });
   } catch (err) {
     console.error('Profile error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// ========== 微信登录 API ==========
+
+// 用 code 换取 openid
+app.post('/api/wechat/exchange-code', async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'code不能为空' });
+
+  if (!WECHAT_SECRET) {
+    return res.status(500).json({ error: '微信配置缺失，请联系管理员' });
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.weixin.qq.com/sns/jscode2session?appid=${WECHAT_APPID}&secret=${WECHAT_SECRET}&js_code=${code}&grant_type=authorization_code`
+    );
+    const data = await response.json();
+
+    if (data.errcode) {
+      console.error('微信API错误:', data.errcode, data.errmsg);
+      return res.status(400).json({ error: '微信登录失败: ' + data.errmsg });
+    }
+
+    res.json({ openid: data.openid });
+  } catch (err) {
+    console.error('Exchange code error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 用 openid 登录
+app.post('/api/wechat/login', async (req, res) => {
+  const { openid } = req.body;
+  if (!openid) return res.status(400).json({ error: 'openid不能为空' });
+
+  try {
+    const data = await loadData();
+    const user = data.users.find(u => u.openid === openid);
+
+    if (!user) {
+      return res.status(404).json({ error: '未找到绑定的账号' });
+    }
+
+    res.json({ user });
+  } catch (err) {
+    console.error('Wechat login error:', err);
+    res.status(500).json({ error: '服务器错误' });
+  }
+});
+
+// 绑定 openid 到用户
+app.post('/api/wechat/bind', async (req, res) => {
+  const { userId, openid } = req.body;
+  if (!userId || !openid) return res.status(400).json({ error: '参数不完整' });
+
+  try {
+    let result = null;
+    await withWriteLock(data => {
+      // 检查 openid 是否已被其他用户绑定
+      const existing = data.users.find(u => u.openid === openid && u.userId !== userId);
+      if (existing) {
+        result = { error: '该微信账号已绑定其他用户', status: 400 };
+        return;
+      }
+
+      const user = data.users.find(u => u.userId === userId);
+      if (!user) {
+        result = { error: '用户不存在', status: 404 };
+        return;
+      }
+
+      user.openid = openid;
+      result = { success: true, user };
+    });
+
+    if (result.error) {
+      return res.status(result.status).json({ error: result.error });
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('Bind wechat error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
