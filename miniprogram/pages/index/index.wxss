@@ -416,3 +416,27 @@
 .contact-btn::after {
   border: none !important;
 }
+
+/* 绑定微信账号 */
+.profile-bind-wechat {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx 0 8rpx;
+  margin-top: 16rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.profile-bind-icon {
+  font-size: 32rpx;
+  margin-right: 12rpx;
+}
+
+.profile-bind-text {
+  font-size: 24rpx;
+  color: #07c160;
+}
+
+.profile-bind-wechat:active {
+  opacity: 0.7;
+}

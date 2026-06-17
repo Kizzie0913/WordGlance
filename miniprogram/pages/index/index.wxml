@@ -191,6 +191,11 @@
           <text>保存</text>
         </view>
       </view>
+      <!-- 绑定微信账号 -->
+      <view class="profile-bind-wechat" bindtap="bindWechatAccount">
+        <text class="profile-bind-icon">📱</text>
+        <text class="profile-bind-text">{{isWechatBound ? '微信已绑定 ✓' : '绑定微信账号（清理缓存后可自动登录）'}}</text>
+      </view>
     </view>
   </view>
 

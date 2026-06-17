@@ -27,7 +27,8 @@ Page({
     showProfileEditor: false,
     editNickname: '',
     editAvatar: '',
-    editUserId: ''  // 用户ID，用于账号找回
+    editUserId: '',  // 用户ID，用于账号找回
+    isWechatBound: false  // 是否已绑定微信账号
   },
 
   onShow: function () {
@@ -93,13 +94,30 @@ Page({
     if (!user || user.isGuest) {
       wx.navigateTo({ url: '/pages/login/login' })
     } else {
-      // 已登录用户点击头像：打开修改资料弹窗
-      this.setData({
+      // 已登录用户点击头像：打开修改资料弹窗，并检查微信绑定状态
+      var that = this
+      that.setData({
         showProfileEditor: true,
-        editNickname: this.data.nickName,
-        editAvatar: this.data.avatarEmoji,
-        editUserId: storage.getUserId() || ''
+        editNickname: that.data.nickName,
+        editAvatar: that.data.avatarEmoji,
+        editUserId: storage.getUserId() || '',
+        isWechatBound: false  // 先假设未绑定
       })
+
+      // 从服务器检查是否已绑定微信
+      var userId = storage.getUserId()
+      if (userId) {
+        wx.request({
+          url: API_BASE + '/api/users/profile?userId=' + encodeURIComponent(userId),
+          method: 'GET',
+          timeout: 8000,
+          success: function (res) {
+            if (res.data && res.data.user && res.data.user.openid) {
+              that.setData({ isWechatBound: true })
+            }
+          }
+        })
+      }
     }
   },
 
@@ -208,6 +226,89 @@ Page({
   // 取消修改
   cancelEditProfile: function () {
     this.setData({ showProfileEditor: false })
+  },
+
+  // 绑定微信账号
+  bindWechatAccount: function () {
+    var that = this
+
+    // 如果已绑定，提示用户
+    if (that.data.isWechatBound) {
+      wx.showToast({ title: '已绑定微信账号', icon: 'none' })
+      return
+    }
+
+    wx.showLoading({ title: '绑定中...' })
+
+    wx.login({
+      success: function (loginRes) {
+        if (!loginRes.code) {
+          wx.hideLoading()
+          wx.showToast({ title: '获取微信登录状态失败', icon: 'none' })
+          return
+        }
+
+        var code = loginRes.code
+        var userId = storage.getUserId()
+
+        // 第一步：用 code 换 openid
+        wx.request({
+          url: API_BASE + '/api/wechat/exchange-code',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: { code: code },
+          timeout: 8000,
+          success: function (res) {
+            if (!res.data || !res.data.openid) {
+              wx.hideLoading()
+              wx.showToast({ title: '微信登录失败', icon: 'none' })
+              return
+            }
+
+            var openid = res.data.openid
+
+            // 第二步：绑定 openid 到用户账号
+            wx.request({
+              url: API_BASE + '/api/wechat/bind',
+              method: 'POST',
+              header: { 'Content-Type': 'application/json' },
+              data: {
+                userId: userId,
+                openid: openid
+              },
+              timeout: 8000,
+              success: function (bindRes) {
+                wx.hideLoading()
+                if (bindRes.data && bindRes.data.success) {
+                  that.setData({ isWechatBound: true })
+                  wx.showToast({ title: '微信账号绑定成功！', icon: 'success' })
+                } else if (bindRes.data && bindRes.data.error) {
+                  wx.showModal({
+                    title: '绑定失败',
+                    content: bindRes.data.error,
+                    showCancel: false
+                  })
+                } else {
+                  wx.showToast({ title: '绑定失败，请重试', icon: 'none' })
+                }
+              },
+              fail: function () {
+                wx.hideLoading()
+                wx.showToast({ title: '网络错误，请重试', icon: 'none' })
+              }
+            })
+          },
+          fail: function () {
+            wx.hideLoading()
+            wx.showToast({ title: '网络错误，请重试', icon: 'none' })
+          }
+        })
+      },
+      fail: function () {
+        wx.hideLoading()
+        wx.showToast({ title: '微信登录失败', icon: 'none' })
+      }
+    })
   },
 
   // 跳转到识图翻译
