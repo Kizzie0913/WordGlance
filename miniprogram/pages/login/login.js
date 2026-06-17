@@ -457,7 +457,8 @@ Page({
       method: 'GET',
       timeout: 10000,
       success: function (res) {
-        if (res.data && res.data.user) {
+        // 检查 HTTP 状态码
+        if (res.statusCode === 200 && res.data && res.data.user) {
           // 找到了！直接登录
           doLogin(res.data.user)
           return
@@ -469,7 +470,8 @@ Page({
           timeout: 10000,
           success: function (res2) {
             wx.hideLoading()
-            if (res2.data && res2.data.user) {
+            // 检查 HTTP 状态码
+            if (res2.statusCode === 200 && res2.data && res2.data.user) {
               // 找到了！直接登录
               doLogin(res2.data.user)
             } else {
