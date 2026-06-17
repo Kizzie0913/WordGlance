@@ -802,50 +802,86 @@ app.get('/api/friends/pk/history', async (req, res) => {
   }
 });
 
+// 搞笑PK评语库
+const PK_COMMENTS = {
+  // 完胜（等级差 >= 5）
+  bigWin: [
+    '这根本不是PK，这是降维打击！🐜 vs 🦖',
+    '对手：我是谁？我在哪？发生了什么？😵',
+    '这波属于是让了五条街还赢了🏃‍♂️💨',
+    '对手：我怀疑你在开挂，而且我有证据 🕵️',
+    '级别碾压局，建议对手回去重修英语 ABC 📖',
+    '这差距，大概是小学和博士的区別 🎓',
+    '对手的英语水平：abandon... 然后真的 abandon 了 💔',
+    '这不是PK，这是老师在给学生上课 👩‍🏫',
+    '对手：我想回家 😭',
+    '强者恐怖如斯！对手表示已卸载App 📱🗑️'
+  ],
+  // 小胜（等级差 1-4）
+  closeWin: [
+    '险胜！但胜了就是胜了 💪😎',
+    '赢是赢了，但赢得心虚 🫣',
+    '就赢了一点点，不多，就亿点点 🤏',
+    '差一点就翻车了！还好没翻 🚗',
+    '对手：下次一定！这次不算！😤',
+    '胜利虽然勉强，但头还是要昂起来的 🦒',
+    '赢了！但对手表示不服要二番战 🥊',
+    '这场PK告诉我们：稳住，我们能赢 ✊',
+    '勉强续命成功，下次还敢 😏'
+  ],
+  // 平局
+  draw: [
+    '势均力敌！建议用石头剪刀布决胜负 ✊✋✌️',
+    '旗鼓相当！你们是失散多年的英语双胞胎吗？👯',
+    '平局！友谊的小船说翻没翻 🚣',
+    '实力太接近了，建议加赛一轮 🔁',
+    '你俩是约好的吧？这么默契 🤔',
+    '打了个平手！你们该不会是同一个老师教的吧？👨‍🏫',
+    '棋逢对手！建议搞个加时赛 ⏰',
+    '半斤八两，谁也别笑谁 🤭'
+  ],
+  // 小败（等级差 1-4）
+  closeLose: [
+    '惜败！但败了就是败了 😢 没开玩笑',
+    '差点就赢了！差的就是亿点点 🤏',
+    '虽然输了，但精神可嘉！给个安慰奖 🎀',
+    '对手赢了一点点，真的只有一点点 😤',
+    '这次不算！我状态不好！下次一定！😤',
+    '输人不输阵！头可断发型不能乱 💇',
+    '微弱劣势落败，下次我准备好了 🔥',
+    '败了？不可能！一定是计时器坏了 ⏱️'
+  ],
+  // 完败（等级差 >= 5）
+  bigLose: [
+    '被打得找不着北了...北在哪？🧭❓',
+    '这差距有点大，建议回家背单词 📚',
+    '对手：谢谢惠顾~ 你：再来一瓶！🎰',
+    '被碾压了...但没关系，失败是成功之母 🤰',
+    '对手：还有谁？你：...我还在 🙋',
+    '实力悬殊！但记住：学霸也曾是学渣 📖',
+    '被吊打了...建议先去背10个abandon冷静一下 😌',
+    '对手的词典有10000词，你的词典...还在路上 📮',
+    '这不是输，这是战略性撤退！🏃‍♂️💨',
+    '被完虐！但今天的我已不是昨天的我 💪'
+  ]
+};
+
 function getPkComment(myLevel, friendLevel, iWin) {
-  const diff = Math.abs(myLevel - friendLevel);  
+  const diff = Math.abs(myLevel - friendLevel);
+
   if (diff === 0) {
-    const comments = [
-      '旗鼓相当！下次再战！⚔️',
-      '高手过招，精彩！👏',
-      '不分伯仲，友谊第一！🤝'
-    ];
+    const comments = PK_COMMENTS.draw;
     return comments[Math.floor(Math.random() * comments.length)];
   }
 
-  const isBig = diff >= 5;  
+  const isBig = diff >= 5;
+
   if (iWin) {
-    if (isBig) {
-      const winComments = [
-        `以弱胜强！${friendLevel}级的${friendNickname}输给了${myLevel}级的我！🎉`,
-        '逆风翻盘！太燃了！🔥',
-        '不愧是我！弱者也能胜利！💪'
-      ];
-      return winComments[Math.floor(Math.random() * winComments.length)];
-    } else {
-      const winComments = [
-        '轻松取胜！💪',
-        '实力获胜！👍',
-        '赢得漂亮！✨'
-      ];
-      return winComments[Math.floor(Math.random() * winComments.length)];
-    }
+    const pool = isBig ? PK_COMMENTS.bigWin : PK_COMMENTS.closeWin;
+    return pool[Math.floor(Math.random() * pool.length)];
   } else {
-    if (isBig) {
-      const loseComments = [
-        `输给${friendLevel}级的${friendNickname}，差距太大了...😭`,
-        '级别差距太大，认了...📉',
-        '强者面前，我还需努力💦'
-      ];
-      return loseComments[Math.floor(Math.random() * loseComments.length)];
-    } else {
-      const loseComments = [
-        '可惜了，下次一定赢！💪',
-        '运气不好，再来！🎲',
-        '不服，再战！⚔️'
-      ];
-      return loseComments[Math.floor(Math.random() * loseComments.length)];
-    }
+    const pool = isBig ? PK_COMMENTS.bigLose : PK_COMMENTS.closeLose;
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 }
 
