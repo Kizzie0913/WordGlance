@@ -4,12 +4,12 @@
       "userId": "u_1781646780240_ei18wk",
       "nickname": "mia",
       "avatar": "🦸",
-      "level": 1,
-      "title": "Noobslayer",
-      "exp": 9,
+      "level": 3,
+      "title": "Grammar Bandit",
+      "exp": 56,
       "createdAt": "2026-06-17T00:33:26.099Z",
       "lastLogin": "2026-06-17T08:49:31.468Z",
-      "lastSync": "2026-06-17T09:53:52.308Z"
+      "lastSync": "2026-06-17T10:58:50.576Z"
     },
     {
       "userId": "u_1781631383256_tff92l",
@@ -158,9 +158,9 @@
       "user2Id": "u_1781646780240_ei18wk",
       "user2": "mia",
       "user2Avatar": "🦸",
-      "user2Level": 1,
-      "user2Title": "Noobslayer",
-      "user2Exp": 9,
+      "user2Level": 3,
+      "user2Title": "Grammar Bandit",
+      "user2Exp": 56,
       "createdAt": "2026-06-17T00:36:25.110Z"
     },
     {
@@ -174,9 +174,9 @@
       "user2Id": "u_1781646780240_ei18wk",
       "user2": "mia",
       "user2Avatar": "🦸",
-      "user2Level": 1,
-      "user2Title": "Noobslayer",
-      "user2Exp": 9,
+      "user2Level": 3,
+      "user2Title": "Grammar Bandit",
+      "user2Exp": 56,
       "createdAt": "2026-06-17T01:00:10.880Z"
     },
     {
