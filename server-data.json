@@ -966,6 +966,16 @@
       "result": "lose",
       "comment": "对手赢了一点点，真的只有一点点 😤",
       "createdAt": "2026-06-17T12:02:39.071Z"
+    },
+    {
+      "id": 1781697770707,
+      "challenger": "oooo",
+      "challengerLevel": 1,
+      "defender": "mia",
+      "defenderLevel": 3,
+      "result": "lose",
+      "comment": "微弱劣势落败，下次我准备好了 🔥",
+      "createdAt": "2026-06-17T12:02:50.707Z"
     }
   ]
 }
