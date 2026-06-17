@@ -2,13 +2,13 @@
   "users": [
     {
       "userId": "u_1781646780240_ei18wk",
-      "nickname": "MIA",
+      "nickname": "mia",
       "avatar": "👻",
       "level": 1,
       "title": "Noobslayer",
       "exp": 0,
       "createdAt": "2026-06-17T00:33:26.099Z",
-      "lastLogin": "2026-06-17T01:00:28.330Z"
+      "lastLogin": "2026-06-17T01:08:05.471Z"
     },
     {
       "userId": "u_1781631383256_tff92l",
@@ -25,7 +25,7 @@
     {
       "id": 1781656639601,
       "userId": "u_1781646780240_ei18wk",
-      "nickname": "MIA",
+      "nickname": "mia",
       "avatar": "👻",
       "content": "lol",
       "type": "text",
@@ -55,7 +55,7 @@
       "user1Title": "Noobslayer",
       "user1Exp": 0,
       "user2Id": "u_1781646780240_ei18wk",
-      "user2": "MIA",
+      "user2": "mia",
       "user2Avatar": "👻",
       "user2Level": 1,
       "user2Title": "Noobslayer",
@@ -71,7 +71,7 @@
       "user1Title": "Grammar Bandit",
       "user1Exp": 84,
       "user2Id": "u_1781646780240_ei18wk",
-      "user2": "MIA",
+      "user2": "mia",
       "user2Avatar": "👻",
       "user2Level": 1,
       "user2Title": "Noobslayer",
