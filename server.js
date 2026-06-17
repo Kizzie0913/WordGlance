@@ -1390,24 +1390,67 @@ app.get('/api/reports/weekly', async (req, res) => {
 
 // ========== 句式优化工具 API（规则版）==========
 
+// 分析句子并给出优化建议
+function analyzeSentence(sentence) {
+  const s = sentence.trim();
+  const suggestions = [];
+  
+  // 检测常见错误
+  if (s.match(/very\s+\w+/i)) {
+    suggestions.push("• 避免 'very + adj'，尝试用更精确的词：very good → excellent, very bad → terrible");
+  }
+  
+  if (s.match(/\b(is|am|are|was|were)\b.*\b(verb|do|go|come|make)\b/i) && !s.match(/ing$/)) {
+    suggestions.push("• 注意时态：描述正在发生的动作要用进行时（be + verb+ing）");
+  }
+  
+  if (s.match(/I\s+(am|have|has|had)\s+\w+ed/i)) {
+    suggestions.push("• 过去分词用法检查：'I am + 过去分词' 表示被动语态，确认是否想表达被动");
+  }
+  
+  if (s.match(/he\s+(work|go|play|like|love|want|need)\s/i) && !s.match(/s\s/)) {
+    suggestions.push("• 第三人称单数：He/She/It 作主语时，动词要加 -s");
+  }
+  
+  if (s.match(/there\s+(is|are)\s+\w+\s+\w+ing/i)) {
+    suggestions.push("• 'There be + noun + doing' 是正确结构，表示'有...正在...'");
+  }
+  
+  // 通用优化建议
+  if (s.split(' ').length < 8) {
+    suggestions.push("• 短句可以尝试添加细节：用从句、介词短语让句子更丰富");
+    suggestions.push("• 尝试用更生动的动词：make → create/produce, get → obtain/receive");
+  } else {
+    suggestions.push("• 长句可以尝试拆分，或用连接词（however, therefore, moreover）增强逻辑");
+  }
+  
+  if (s.match(/\b(thing|stuff|good|bad|big|small)\b/i)) {
+    suggestions.push("• 尝试用更具体的词：thing → item/object, good → beneficial/positive");
+  }
+  
+  // 如果没有检测到特定问题，给出通用建议
+  if (suggestions.length === 0) {
+    suggestions.push("• 尝试用更地道的短语替换普通动词");
+    suggestions.push("• 使用连接词让句子更流畅：not only...but also, either...or");
+    suggestions.push("• 检查是否可以直接用英语思维表达，而不是直译中文");
+  }
+  
+  return suggestions.join('\n');
+}
+
 const SENTENCE_PATTERNS = [
+  // ===== 基础表达优化 =====
   {
     pattern: /I am very (.*)/i,
     chinglish: 'I am very [adj]',
     standard: 'I am very [adj]',
-    native: (m) => `I'm absolutely ${m[1]} / I'm really ${m[1]}`
+    native: (m) => `I'm absolutely ${m[1]} / I'm really ${m[1]} / I'm extremely ${m[1]}`
   },
   {
     pattern: /I think (.*)/i,
     chinglish: 'I think...',
     standard: 'I think...',
-    native: (m) => `In my opinion, ... / Personally, I believe that ...`
-  },
-  {
-    pattern: /How are you\?/i,
-    chinglish: 'How are you?',
-    standard: 'How are you?',
-    native: () => `How's it going? / How have you been? / What's up?`
+    native: (m) => `In my opinion, ... / Personally, I believe that ... / From my perspective, ...`
   },
   {
     pattern: /I want to (.*)/i,
@@ -1420,6 +1463,246 @@ const SENTENCE_PATTERNS = [
     chinglish: 'It\'s [adj] for me to [verb]',
     standard: 'It\'s [adj] for me to [verb]',
     native: (m) => `I find it ${m[1]} to ${m[2]} / It takes me effort to ${m[2]}`
+  },
+  {
+    pattern: /How are you\?/i,
+    chinglish: 'How are you?',
+    standard: 'How are you?',
+    native: () => `How's it going? / How have you been? / What's up? / How's everything?`
+  },
+  
+  // ===== 中式英语常见错误 =====
+  {
+    pattern: /I very like (.*)/i,
+    chinglish: 'I very like...',
+    standard: 'I like... very much',
+    native: (m) => `I really like ${m[1]} / I'm a big fan of ${m[1]} / I absolutely love ${m[1]}`
+  },
+  {
+    pattern: /I am come from (.*)/i,
+    chinglish: 'I am come from...',
+    standard: 'I come from...',
+    native: (m) => `I'm from ${m[1]} / I was born and raised in ${m[1]} / I grew up in ${m[1]}`
+  },
+  {
+    pattern: /My English is poor/i,
+    chinglish: 'My English is poor',
+    standard: 'My English is not very good',
+    native: () => `I'm still working on my English / I'm still improving my English / I'm not fully confident in my English yet`
+  },
+  {
+    pattern: /I am a student/i,
+    chinglish: 'I am a student',
+    standard: 'I am a student',
+    native: () => `I'm studying [subject] at [university] / I'm a [major] student / I'm currently in school`
+  },
+  {
+    pattern: /Open the light/i,
+    chinglish: 'Open the light',
+    standard: 'Turn on the light',
+    native: () => `Turn on the light / Switch on the light / Could you turn on the light?`
+  },
+  {
+    pattern: /Close the light/i,
+    chinglish: 'Close the light',
+    standard: 'Turn off the light',
+    native: () => `Turn off the light / Switch off the light / Could you turn off the light?`
+  },
+  {
+    pattern: /I have a question/i,
+    chinglish: 'I have a question',
+    standard: 'I have a question',
+    native: () => `I was wondering... / Could I ask... / I'm curious about... / May I ask...`
+  },
+  {
+    pattern: /I don't know what does it mean/i,
+    chinglish: 'I don\'t know what does it mean',
+    standard: 'I don\'t know what it means',
+    native: () => `I'm not sure what that means / Could you explain that? / I didn't catch the meaning`
+  },
+  
+  // ===== 礼貌表达 =====
+  {
+    pattern: /Give me (.*)/i,
+    chinglish: 'Give me...',
+    standard: 'Can you give me...?',
+    native: (m) => `Could you pass me ${m[1]}? / Would you mind giving me ${m[1]}? / May I have ${m[1]}?`
+  },
+  {
+    pattern: /Bring me (.*)/i,
+    chinglish: 'Bring me...',
+    standard: 'Can you bring me...?',
+    native: (m) => `Could you bring me ${m[1]}? / Would you mind getting me ${m[1]}? / Can I get ${m[1]}?`
+  },
+  {
+    pattern: /I want to go (.*)/i,
+    chinglish: 'I want to go...',
+    standard: 'I want to go...',
+    native: (m) => `I'd like to go ${m[1]} / I'm thinking of going to ${m[1]} / I was hoping to visit ${m[1]}`
+  },
+  
+  // ===== 情感表达 =====
+  {
+    pattern: /I am happy/i,
+    chinglish: 'I am happy',
+    standard: 'I am happy',
+    native: () => `I'm delighted / I'm thrilled / I'm over the moon / That makes me so happy`
+  },
+  {
+    pattern: /I am sad/i,
+    chinglish: 'I am sad',
+    standard: 'I am sad',
+    native: () => `I'm feeling down / I'm upset / I'm heartbroken / That's really depressing`
+  },
+  {
+    pattern: /I am angry/i,
+    chinglish: 'I am angry',
+    standard: 'I am angry',
+    native: () => `I'm furious / I'm annoyed / That really irritates me / I'm pretty upset about this`
+  },
+  {
+    pattern: /I am tired/i,
+    chinglish: 'I am tired',
+    standard: 'I am tired',
+    native: () => `I'm exhausted / I'm worn out / I'm beat / I need a break`
+  },
+  
+  // ===== 时间表达 =====
+  {
+    pattern: /I will go (.*)/i,
+    chinglish: 'I will go...',
+    standard: 'I will go...',
+    native: (m) => `I'm going to ${m[1]} / I plan to go ${m[1]} / I'm thinking of going ${m[1]}`
+  },
+  {
+    pattern: /I go to (.*) yesterday/i,
+    chinglish: 'I go to... yesterday',
+    standard: 'I went to... yesterday',
+    native: (m) => `I visited ${m[1]} yesterday / I went to ${m[1]} yesterday / I stopped by ${m[1]} yesterday`
+  },
+  {
+    pattern: /I have been to (.*)/i,
+    chinglish: 'I have been to...',
+    standard: 'I have been to...',
+    native: (m) => `I've visited ${m[1]} / I've been to ${m[1]} before / I've had the chance to visit ${m[1]}`
+  },
+  
+  // ===== 建议与请求 =====
+  {
+    pattern: /You should (.*)/i,
+    chinglish: 'You should...',
+    standard: 'You should...',
+    native: (m) => `You might want to ${m[1]} / It might be a good idea to ${m[1]} / Have you considered ${m[1]}?`
+  },
+  {
+    pattern: /Can you help me\?/i,
+    chinglish: 'Can you help me?',
+    standard: 'Can you help me?',
+    native: () => `Could you give me a hand? / Would you mind helping me out? / I could use some help`
+  },
+  {
+    pattern: /What do you think\?/i,
+    chinglish: 'What do you think?',
+    standard: 'What do you think?',
+    native: () => `What's your take on this? / How do you feel about it? / What's your opinion?`
+  },
+  
+  // ===== 高频口语优化 =====
+  {
+    pattern: /That's good/i,
+    chinglish: 'That\'s good',
+    standard: 'That\'s good',
+    native: () => `That's awesome! / That's fantastic! / That's wonderful! / Sounds great!`
+  },
+  {
+    pattern: /I agree with you/i,
+    chinglish: 'I agree with you',
+    standard: 'I agree with you',
+    native: () => `Absolutely! / I couldn't agree more / That's exactly what I think / You took the words right out of my mouth`
+  },
+  {
+    pattern: /I disagree/i,
+    chinglish: 'I disagree',
+    standard: 'I disagree',
+    native: () => `I see it differently / I'm not sure I agree / I have a different perspective / Actually, I think...`
+  },
+  {
+    pattern: /I am sorry/i,
+    chinglish: 'I am sorry',
+    standard: 'I am sorry',
+    native: () => `I apologize / I didn't mean to / That was my mistake / I feel terrible about that`
+  },
+  {
+    pattern: /Thank you/i,
+    chinglish: 'Thank you',
+    standard: 'Thank you',
+    native: () => `Thanks so much! / I really appreciate it / That means a lot / You're the best`
+  },
+  
+  // ===== 描述能力 =====
+  {
+    pattern: /I can (.*)/i,
+    chinglish: 'I can...',
+    standard: 'I can...',
+    native: (m) => `I'm able to ${m[1]} / I have the skills to ${m[1]} / I'm capable of ${m[1]}`
+  },
+  {
+    pattern: /I can't (.*)/i,
+    chinglish: 'I can\'t...',
+    standard: 'I can\'t...',
+    native: (m) => `I'm not able to ${m[1]} / I haven't mastered ${m[1]} yet / ${m[1]} is still challenging for me`
+  },
+  {
+    pattern: /I am good at (.*)/i,
+    chinglish: 'I am good at...',
+    standard: 'I am good at...',
+    native: (m) => `I'm skilled at ${m[1]} / I excel in ${m[1]} / I have a talent for ${m[1]}`
+  },
+  {
+    pattern: /I am bad at (.*)/i,
+    chinglish: 'I am bad at...',
+    standard: 'I am bad at...',
+    native: (m) => `I struggle with ${m[1]} / I'm not very skilled at ${m[1]} / ${m[1]} is not my strong suit`
+  },
+  
+  // ===== 天气与寒暄 =====
+  {
+    pattern: /It's a nice day/i,
+    chinglish: 'It\'s a nice day',
+    standard: 'It\'s a nice day',
+    native: () => `Beautiful day, isn't it? / Lovely weather we're having / It's such a gorgeous day`
+  },
+  {
+    pattern: /What's your name\?/i,
+    chinglish: 'What\'s your name?',
+    standard: 'What\'s your name?',
+    native: () => `May I have your name? / How should I call you? / I'm [name], nice to meet you`
+  },
+  {
+    pattern: /My name is (.*)/i,
+    chinglish: 'My name is...',
+    standard: 'My name is...',
+    native: (m) => `I'm ${m[1]} / My name's ${m[1]} / You can call me ${m[1]}`
+  },
+  
+  // ===== 高频错误修正 =====
+  {
+    pattern: /People? (.*) (is|are) (.*)/i,
+    chinglish: 'People [verb]...',
+    standard: 'People [verb]...',
+    native: (m) => `Folks ${m[1]} / Individuals ${m[1]} / We as a society ${m[1]}`
+  },
+  {
+    pattern: /I have (.*) years old/i,
+    chinglish: 'I have... years old',
+    standard: 'I am... years old',
+    native: (m) => `I'm ${m[1]} years old / I'm ${m[1]} / I turned ${m[1]} recently`
+  },
+  {
+    pattern: /He (work|go|play|study|live|want) (.*) every day/i,
+    chinglish: 'He [verb] every day (missing s)',
+    standard: 'He [verb]s every day',
+    native: (m) => `He usually ${m[1]}s ${m[2]} / He tends to ${m[1]} ${m[2]} daily / He makes a habit of ${m[1]}ing ${m[2]}`
   }
 ];
 
@@ -1453,15 +1736,16 @@ app.post('/api/tools/sentence-optimize', async (req, res) => {
         }
       });
     } else {
-      // 没有匹配到模式，返回通用建议
+      // 没有匹配到模式，分析句子并给出建议
+      let suggestions = analyzeSentence(s);
       res.json({
         success: true,
         result: {
           original: s,
-          chinglish: s,
-          standard: s,
-          native: `建议：尝试用更丰富的动词替换 be 动词；用具体表达替换 very + adj；用从句提升句式复杂度。`,
-          explanation: '未匹配到特定句式，以上是通用优化建议。'
+          chinglish: '⚠️ 可能的中式表达',
+          standard: '✅ 标准表达（建议检查）',
+          native: suggestions,
+          explanation: '未精确匹配到特定句式，但可以通过以下方向优化：1) 避免直译中文思维 2) 使用更地道的动词和短语 3) 注意时态和单复数'
         }
       });
     }
