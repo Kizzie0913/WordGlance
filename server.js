@@ -756,7 +756,7 @@ app.delete('/api/friends', async (req, res) => {
 // ========== PK 功能 ==========
 
 app.post('/api/friends/pk', async (req, res) => {
-  const { myNickname, myLevel, myTitle, myExp, myAvatar,
+  const { myNickname, myLevel, myTitle, myExp, myAvatar, myUserId,
           friendNickname, friendLevel, friendTitle, friendExp, friendAvatar } = req.body;
 
   if (!myNickname || !friendNickname) return res.status(400).json({ error: '昵称不能为空' });
@@ -764,10 +764,20 @@ app.post('/api/friends/pk', async (req, res) => {
   try {
     const data = await loadData();
 
-    const isFriend = data.friends.some(f =>
-      (f.user1 === myNickname && f.user2 === friendNickname) ||
-      (f.user1 === friendNickname && f.user2 === myNickname)
-    );
+    // 好友匹配：同时支持 nickname 和 userId
+    const isFriend = data.friends.some(f => {
+      // 通过 userId 匹配
+      if (myUserId) {
+        const mySide = f.user1Id === myUserId ? 'user1' : (f.user2Id === myUserId ? 'user2' : '');
+        if (mySide) {
+          const otherNickname = mySide === 'user1' ? f.user2 : f.user1;
+          return otherNickname === friendNickname;
+        }
+      }
+      // 通过 nickname 匹配
+      return (f.user1 === myNickname && f.user2 === friendNickname) ||
+             (f.user1 === friendNickname && f.user2 === myNickname);
+    });
 
     if (!isFriend) return res.status(400).json({ error: '你们不是好友，不能PK' });
 
