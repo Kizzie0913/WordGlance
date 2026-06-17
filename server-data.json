@@ -2,21 +2,21 @@
   "users": [
     {
       "userId": "u_1781646780240_ei18wk",
-      "nickname": "mia",
-      "avatar": "🎃",
+      "nickname": "MIA",
+      "avatar": "👻",
       "level": 1,
       "title": "Noobslayer",
       "exp": 0,
       "createdAt": "2026-06-17T00:33:26.099Z",
-      "lastLogin": "2026-06-17T00:33:32.334Z"
+      "lastLogin": "2026-06-17T00:33:57.251Z"
     }
   ],
   "messages": [
     {
       "id": 1781656419134,
       "userId": "u_1781646780240_ei18wk",
-      "nickname": "mia",
-      "avatar": "🎃",
+      "nickname": "MIA",
+      "avatar": "👻",
       "content": "hi",
       "type": "text",
       "likes": 0,
