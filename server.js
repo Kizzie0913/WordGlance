@@ -1,21 +1,82 @@
-// server.js - WordGlance 后端（Supabase 版本）
+// server.js - WordGlance 后端（GitHub Gist 数据存储版本）
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Supabase 配置
-const SUPABASE_URL = 'https://cdawnrlixevumhcayycw.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkYXZucmxpeGV2dW1oY2F5eWN3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTYyNzc1MiwiZXhwIjoyMDk3MjAzNzUyfQ.tHUiI_6V4zL65uZBQVIveAbq3_1LG6IsCZ7jeQKpsQM';
+// GitHub Gist 配置（用于存储 data.json）
+const GIST_ID = 'YOUR_GIST_ID'; // 需要创建一个 Gist
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const DATA_FILE = path.join(__dirname, 'data.json');
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// 加载数据（优先从 GitHub Gist 加载，失败则从本地文件加载）
+async function loadData() {
+  try {
+    if (GITHUB_TOKEN && GIST_ID !== 'YOUR_GIST_ID') {
+      const response = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'User-Agent': 'WordGlance'
+        }
+      });
+      if (response.ok) {
+        const gist = await response.json();
+        if (gist.files && gist.files['data.json']) {
+          const content = gist.files['data.json'].content;
+          fs.writeFileSync(DATA_FILE, content, 'utf8');
+          return JSON.parse(content);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('从 Gist 加载失败，使用本地文件:', err.message);
+  }
+
+  // 从本地文件加载
+  if (!fs.existsSync(DATA_FILE)) {
+    return { users: [], messages: [], friends: [], friendRequests: [], pkRecords: [] };
+  }
+  const raw = fs.readFileSync(DATA_FILE, 'utf8');
+  return JSON.parse(raw || '{"users":[],"messages":[],"friends":[],"friendRequests":[],"pkRecords":[]}');
+}
+
+// 保存数据（同时保存到本地和 GitHub Gist）
+async function saveData(data) {
+  const json = JSON.stringify(data, null, 2);
+  fs.writeFileSync(DATA_FILE, json, 'utf8');
+
+  // 同步到 GitHub Gist
+  if (GITHUB_TOKEN && GIST_ID !== 'YOUR_GIST_ID') {
+    try {
+      await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${GITHUB_TOKEN}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'WordGlance'
+        },
+        body: JSON.stringify({
+          files: {
+            'data.json': {
+              content: json
+            }
+          }
+        })
+      });
+    } catch (err) {
+      console.error('同步到 Gist 失败:', err.message);
+    }
+  }
+}
 
 // ========== 用户资料 API ==========
 
@@ -27,82 +88,68 @@ app.post('/api/users/register', async (req, res) => {
   const trimmedName = nickname.trim();
   
   try {
+    const data = loadData();
+
     // 检查昵称是否已被其他用户使用
-    const { data: existingUsers } = await supabase
-      .from('users')
-      .select('user_id, nickname')
-      .eq('nickname', trimmedName);
-    
-    if (existingUsers && existingUsers.length > 0 && existingUsers[0].user_id !== userId) {
+    const existingUser = data.users.find(u => u.nickname === trimmedName && u.userId !== userId);
+    if (existingUser) {
       return res.status(409).json({ error: '该昵称已被使用，请换一个独特的昵称' });
     }
 
-    // 查找用户
-    const { data: userData } = await supabase
-      .from('users')
-      .select('*')
-      .eq('user_id', userId);
-    
-    const user = userData && userData.length > 0 ? userData[0] : null;
+    let user = data.users.find(u => u.userId === userId);
     const oldNickname = user ? user.nickname : null;
 
     if (user) {
       // 老用户：更新昵称和头像
-      const { data: updatedUser, error } = await supabase
-        .from('users')
-        .update({
-          nickname: trimmedName,
-          avatar: avatar || user.avatar,
-          last_login: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .select();
-      
-      if (error) throw error;
+      user.nickname = trimmedName;
+      if (avatar) user.avatar = avatar;
+      user.lastLogin = new Date().toISOString();
 
       // 同步更新所有旧留言中的昵称和头像
-      await supabase
-        .from('messages')
-        .update({
-          nickname: trimmedName,
-          avatar: avatar || user.avatar
-        })
-        .eq('user_id', userId);
+      data.messages.forEach(msg => {
+        if (msg.userId === userId) {
+          msg.nickname = trimmedName;
+          if (avatar) msg.avatar = avatar;
+        }
+      });
 
-      // 同步更新好友关系中的信息
-      await supabase
-        .from('friends')
-        .update({
-          user1: trimmedName,
-          user1_avatar: avatar || user.avatar
-        })
-        .or(`user1_id.eq.${userId},user1.eq.${oldNickname}`);
+      // 同步更新好友关系中的信息（兼容旧数据：同时用userId和旧昵称匹配）
+      data.friends.forEach(f => {
+        if (f.user1Id === userId) {
+          f.user1 = trimmedName;
+          if (avatar) f.user1Avatar = avatar;
+        } else if (f.user1 === oldNickname) {
+          f.user1 = trimmedName;
+          f.user1Id = userId;
+          if (avatar) f.user1Avatar = avatar;
+        }
+        if (f.user2Id === userId) {
+          f.user2 = trimmedName;
+          if (avatar) f.user2Avatar = avatar;
+        } else if (f.user2 === oldNickname) {
+          f.user2 = trimmedName;
+          f.user2Id = userId;
+          if (avatar) f.user2Avatar = avatar;
+        }
+      });
 
-      await supabase
-        .from('friends')
-        .update({
-          user2: trimmedName,
-          user2_avatar: avatar || user.avatar
-        })
-        .or(`user2_id.eq.${userId},user2.eq.${oldNickname}`);
-
-      return res.json({ success: true, user: updatedUser[0], isNew: false });
+      saveData(data);
+      return res.json({ success: true, user, isNew: false });
     } else {
       // 新用户
-      const { data: newUser, error } = await supabase
-        .from('users')
-        .insert([{
-          user_id: userId,
-          nickname: trimmedName,
-          avatar: avatar || '🐱',
-          level: 1,
-          title: 'Noobslayer',
-          exp: 0
-        }])
-        .select();
-      
-      if (error) throw error;
-      return res.json({ success: true, user: newUser[0], isNew: true });
+      const newUser = {
+        userId: userId,
+        nickname: trimmedName,
+        avatar: avatar || '🐱',
+        level: 1,
+        title: 'Noobslayer',
+        exp: 0,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString()
+      };
+      data.users.push(newUser);
+      saveData(data);
+      return res.json({ success: true, user: newUser, isNew: true });
     }
   } catch (err) {
     console.error('Register error:', err);
@@ -111,20 +158,15 @@ app.post('/api/users/register', async (req, res) => {
 });
 
 // 获取用户资料
-app.get('/api/users/profile', async (req, res) => {
+app.get('/api/users/profile', (req, res) => {
   const { userId } = req.query;
   if (!userId) return res.status(400).json({ error: 'userId不能为空' });
 
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('user_id', userId);
-    
-    if (error) throw error;
-    if (!data || data.length === 0) return res.status(404).json({ error: '用户不存在' });
-    
-    res.json({ user: data[0] });
+    const data = loadData();
+    const user = data.users.find(u => u.userId === userId);
+    if (!user) return res.status(404).json({ error: '用户不存在' });
+    res.json({ user });
   } catch (err) {
     console.error('Profile error:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -133,66 +175,62 @@ app.get('/api/users/profile', async (req, res) => {
 
 // ========== 留言板 API ==========
 
-app.get('/api/messages', async (req, res) => {
+app.get('/api/messages', (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 20;
   const userId = req.query.userId || '';
 
   try {
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .order('id', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
-    
-    if (error) throw error;
+    const data = loadData();
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    const messages = data.messages.slice(-end).reverse().slice(0, limit);
 
-    const messages = (data || []).map(msg => {
+    const result = messages.map(msg => {
       const msgData = {
         ...msg,
-        time: msg.created_at
+        time: msg.createdAt || msg.time
       };
-      // 如果提供了userId，返回当前用户是否点过赞
-      if (userId && msg.liked_users) {
-        msgData.isLiked = msg.liked_users.includes(userId);
+      if (userId && msg.likedUsers) {
+        msgData.isLiked = msg.likedUsers.includes(userId);
       } else {
         msgData.isLiked = false;
       }
       return msgData;
     });
 
-    res.json({ messages });
+    res.json({ messages: result });
   } catch (err) {
     console.error('Messages error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-app.post('/api/messages', async (req, res) => {
+app.post('/api/messages', (req, res) => {
   const { nickname, avatar, content, userId } = req.body;
   if (!content || !content.trim()) return res.status(400).json({ error: '留言内容不能为空' });
   if (!nickname || !nickname.trim()) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const { data, error } = await supabase
-      .from('messages')
-      .insert([{
-        user_id: userId || '',
-        nickname: nickname.trim(),
-        avatar: avatar || '🐱',
-        content: content.trim(),
-        type: 'text',
-        likes: 0,
-        liked_users: []
-      }])
-      .select();
-    
-    if (error) throw error;
+    const data = loadData();
+    const newMessage = {
+      id: Date.now(),
+      userId: userId || '',
+      nickname: nickname.trim(),
+      avatar: avatar || '🐱',
+      content: content.trim(),
+      type: 'text',
+      likes: 0,
+      likedUsers: [],
+      createdAt: new Date().toISOString()
+    };
+    data.messages.push(newMessage);
+    saveData(data);
 
     res.json({
       success: true,
       message: {
-        ...data[0],
+        ...newMessage,
         time: '刚刚'
       }
     });
@@ -203,56 +241,31 @@ app.post('/api/messages', async (req, res) => {
 });
 
 // 点赞/取消点赞
-app.post('/api/messages/:id/like', async (req, res) => {
+app.post('/api/messages/:id/like', (req, res) => {
   const { userId } = req.body;
   if (!userId) return res.status(400).json({ error: 'userId不能为空' });
 
   try {
+    const data = loadData();
     const messageId = parseInt(req.params.id);
+    const msg = data.messages.find(m => m.id === messageId);
     
-    // 获取当前留言
-    const { data: msgData, error: fetchError } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('id', messageId);
+    if (!msg) return res.status(404).json({ error: '留言不存在' });
     
-    if (fetchError) throw fetchError;
-    if (!msgData || msgData.length === 0) return res.status(404).json({ error: '留言不存在' });
-    
-    const msg = msgData[0];
-    const likedUsers = msg.liked_users || [];
-
+    const likedUsers = msg.likedUsers || [];
     const userIndex = likedUsers.indexOf(userId);
 
     if (userIndex === -1) {
-      // 未点赞，添加点赞
       likedUsers.push(userId);
-      
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          liked_users: likedUsers,
-          likes: likedUsers.length
-        })
-        .eq('id', messageId);
-      
-      if (updateError) throw updateError;
-
+      msg.likedUsers = likedUsers;
+      msg.likes = likedUsers.length;
+      saveData(data);
       res.json({ success: true, liked: true, likes: likedUsers.length });
     } else {
-      // 已点赞，取消点赞
       likedUsers.splice(userIndex, 1);
-      
-      const { error: updateError } = await supabase
-        .from('messages')
-        .update({
-          liked_users: likedUsers,
-          likes: likedUsers.length
-        })
-        .eq('id', messageId);
-      
-      if (updateError) throw updateError;
-
+      msg.likedUsers = likedUsers;
+      msg.likes = likedUsers.length;
+      saveData(data);
       res.json({ success: true, liked: false, likes: likedUsers.length });
     }
   } catch (err) {
@@ -264,31 +277,24 @@ app.post('/api/messages/:id/like', async (req, res) => {
 // ========== 好友系统 API ==========
 
 // 发送好友请求
-app.post('/api/friends/request', async (req, res) => {
+app.post('/api/friends/request', (req, res) => {
   const { fromNickname, fromAvatar, fromLevel, fromTitle, fromExp, toNickname, fromUserId } = req.body;
   if (!fromNickname || !toNickname) return res.status(400).json({ error: '昵称不能为空' });
   if (fromNickname === toNickname) return res.status(400).json({ error: '不能添加自己为好友' });
 
   try {
+    const data = loadData();
+
     // 查找对方的 userId
-    const { data: toUserData } = await supabase
-      .from('users')
-      .select('user_id')
-      .eq('nickname', toNickname);
-    
-    const toUserId = toUserData && toUserData.length > 0 ? toUserData[0].user_id : '';
+    const toUser = data.users.find(u => u.nickname === toNickname);
+    const toUserId = toUser ? toUser.userId : '';
 
     // 检查是否已经是好友（优先用userId匹配）
-    const { data: friendsData } = await supabase
-      .from('friends')
-      .select('*');
-    
-    const isFriend = friendsData && friendsData.some(f => {
-      if (f.user1_id && f.user2_id && fromUserId && toUserId) {
-        return (f.user1_id === fromUserId && f.user2_id === toUserId) ||
-               (f.user1_id === toUserId && f.user2_id === fromUserId);
+    const isFriend = data.friends.some(f => {
+      if (f.user1Id && f.user2Id && fromUserId && toUserId) {
+        return (f.user1Id === fromUserId && f.user2Id === toUserId) ||
+               (f.user1Id === toUserId && f.user2Id === fromUserId);
       }
-      // 兼容旧数据
       return (f.user1 === fromNickname && f.user2 === toNickname) ||
              (f.user1 === toNickname && f.user2 === fromNickname);
     });
@@ -296,68 +302,57 @@ app.post('/api/friends/request', async (req, res) => {
     if (isFriend) return res.status(400).json({ error: '你们已经是好友了' });
 
     // 检查是否已有待处理的请求
-    const { data: existingReq } = await supabase
-      .from('friend_requests')
-      .select('*')
-      .eq('sender', fromNickname)
-      .eq('recver', toNickname)
-      .eq('status', 'pending');
-    
-    if (existingReq && existingReq.length > 0) {
+    const existingReq = data.friendRequests.find(r => 
+      r.sender === fromNickname && r.recver === toNickname && r.status === 'pending'
+    );
+    if (existingReq) {
       return res.status(400).json({ error: '已发送过好友请求，等待对方确认' });
     }
 
     // 检查对方是否已向你发送请求（自动接受）
-    const { data: reverseReq } = await supabase
-      .from('friend_requests')
-      .select('*')
-      .eq('sender', toNickname)
-      .eq('recver', fromNickname)
-      .eq('status', 'pending');
+    const reverseReq = data.friendRequests.find(r => 
+      r.sender === toNickname && r.recver === fromNickname && r.status === 'pending'
+    );
     
-    if (reverseReq && reverseReq.length > 0) {
-      // 自动成为好友
-      await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted' })
-        .eq('id', reverseReq[0].id);
+    if (reverseReq) {
+      reverseReq.status = 'accepted';
 
-      await supabase
-        .from('friends')
-        .insert([{
-          user1_id: fromUserId || '',
-          user1: fromNickname,
-          user1_avatar: fromAvatar || '🐱',
-          user1_level: fromLevel || 1,
-          user1_title: fromTitle || 'Noobslayer',
-          user1_exp: fromExp || 0,
-          user2_id: reverseReq[0].sender_user_id || '',
-          user2: toNickname,
-          user2_avatar: reverseReq[0].sender_avatar,
-          user2_level: reverseReq[0].sender_level,
-          user2_title: reverseReq[0].sender_title,
-          user2_exp: reverseReq[0].sender_exp
-        }]);
+      data.friends.push({
+        id: Date.now(),
+        user1Id: fromUserId || '',
+        user1: fromNickname,
+        user1Avatar: fromAvatar || '🐱',
+        user1Level: fromLevel || 1,
+        user1Title: fromTitle || 'Noobslayer',
+        user1Exp: fromExp || 0,
+        user2Id: reverseReq.senderUserId || '',
+        user2: toNickname,
+        user2Avatar: reverseReq.senderAvatar,
+        user2Level: reverseReq.senderLevel,
+        user2Title: reverseReq.senderTitle,
+        user2Exp: reverseReq.senderExp,
+        createdAt: new Date().toISOString()
+      });
 
+      saveData(data);
       return res.json({ success: true, autoAccepted: true, message: '已自动成为好友' });
     }
 
     // 创建新的好友请求
-    const { error } = await supabase
-      .from('friend_requests')
-      .insert([{
-        sender: fromNickname,
-        sender_user_id: fromUserId || '',
-        sender_avatar: fromAvatar || '🐱',
-        sender_level: fromLevel || 1,
-        sender_title: fromTitle || 'Noobslayer',
-        sender_exp: fromExp || 0,
-        recver: toNickname,
-        status: 'pending'
-      }]);
-    
-    if (error) throw error;
+    data.friendRequests.push({
+      id: Date.now(),
+      sender: fromNickname,
+      senderUserId: fromUserId || '',
+      senderAvatar: fromAvatar || '🐱',
+      senderLevel: fromLevel || 1,
+      senderTitle: fromTitle || 'Noobslayer',
+      senderExp: fromExp || 0,
+      recver: toNickname,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    });
 
+    saveData(data);
     res.json({ success: true, message: '好友请求已发送' });
   } catch (err) {
     console.error('Friend request error:', err);
@@ -366,21 +361,16 @@ app.post('/api/friends/request', async (req, res) => {
 });
 
 // 获取收到的好友请求
-app.get('/api/friends/requests', async (req, res) => {
+app.get('/api/friends/requests', (req, res) => {
   const { nickname } = req.query;
   if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const { data, error } = await supabase
-      .from('friend_requests')
-      .select('*')
-      .eq('recver', nickname)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-
-    res.json({ requests: data || [] });
+    const data = loadData();
+    const requests = data.friendRequests.filter(r => 
+      r.recver === nickname && r.status === 'pending'
+    );
+    res.json({ requests });
   } catch (err) {
     console.error('Friend requests error:', err);
     res.status(500).json({ error: '服务器错误' });
@@ -388,57 +378,43 @@ app.get('/api/friends/requests', async (req, res) => {
 });
 
 // 接受/拒绝好友请求
-app.post('/api/friends/respond', async (req, res) => {
+app.post('/api/friends/respond', (req, res) => {
   const { requestId, accept, toNickname, toAvatar, toLevel, toTitle, toExp, toUserId } = req.body;
   if (!requestId || !toNickname) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    // 获取请求
-    const { data: requestData, error: fetchError } = await supabase
-      .from('friend_requests')
-      .select('*')
-      .eq('id', requestId);
+    const data = loadData();
+    const request = data.friendRequests.find(r => r.id === requestId);
     
-    if (fetchError) throw fetchError;
-    if (!requestData || requestData.length === 0) return res.status(404).json({ error: '请求不存在' });
-    
-    const request = requestData[0];
-
+    if (!request) return res.status(404).json({ error: '请求不存在' });
     if (request.recver !== toNickname) return res.status(403).json({ error: '无权操作' });
     if (request.status !== 'pending') return res.status(400).json({ error: '请求已处理' });
 
     if (accept) {
-      // 接受：更新请求状态 + 创建好友关系
-      await supabase
-        .from('friend_requests')
-        .update({ status: 'accepted' })
-        .eq('id', requestId);
+      request.status = 'accepted';
 
-      await supabase
-        .from('friends')
-        .insert([{
-          user1_id: request.sender_user_id || '',
-          user1: request.sender,
-          user1_avatar: request.sender_avatar,
-          user1_level: request.sender_level,
-          user1_title: request.sender_title,
-          user1_exp: request.sender_exp,
-          user2_id: toUserId || '',
-          user2: toNickname,
-          user2_avatar: toAvatar || '🐱',
-          user2_level: toLevel || 1,
-          user2_title: toTitle || 'Noobslayer',
-          user2_exp: toExp || 0
-        }]);
+      data.friends.push({
+        id: Date.now(),
+        user1Id: request.senderUserId || '',
+        user1: request.sender,
+        user1Avatar: request.senderAvatar,
+        user1Level: request.senderLevel,
+        user1Title: request.senderTitle,
+        user1Exp: request.senderExp,
+        user2Id: toUserId || '',
+        user2: toNickname,
+        user2Avatar: toAvatar || '🐱',
+        user2Level: toLevel || 1,
+        user2Title: toTitle || 'Noobslayer',
+        user2Exp: toExp || 0,
+        createdAt: new Date().toISOString()
+      });
 
+      saveData(data);
       res.json({ success: true, message: '已添加好友' });
     } else {
-      // 拒绝
-      await supabase
-        .from('friend_requests')
-        .update({ status: 'rejected' })
-        .eq('id', requestId);
-
+      request.status = 'rejected';
+      saveData(data);
       res.json({ success: true, message: '已拒绝好友请求' });
     }
   } catch (err) {
@@ -448,43 +424,30 @@ app.post('/api/friends/respond', async (req, res) => {
 });
 
 // 获取好友列表
-app.get('/api/friends', async (req, res) => {
+app.get('/api/friends', (req, res) => {
   const { nickname, userId } = req.query;
   if (!nickname && !userId) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    let friendsData;
+    const data = loadData();
+    let friendsData = data.friends;
 
-    if (userId) {
-      // 优先用 userId 查询
-      const { data, error } = await supabase
-        .from('friends')
-        .select('*')
-        .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
-      
-      if (error) throw error;
-      friendsData = data;
-    } else {
-      // fallback：用 nickname 查询
-      const { data, error } = await supabase
-        .from('friends')
-        .select('*')
-        .or(`user1.eq.${nickname},user2.eq.${nickname}`);
-      
-      if (error) throw error;
-      friendsData = data;
-    }
-
-    const friends = (friendsData || []).map(f => {
-      const isUser1 = userId ? (f.user1_id === userId) : (f.user1 === nickname);
+    const friends = friendsData.filter(f => {
+      if (userId) {
+        return f.user1Id === userId || f.user2Id === userId;
+      } else {
+        return f.user1 === nickname || f.user2 === nickname;
+      }
+    }).map(f => {
+      const isUser1 = userId ? (f.user1Id === userId) : (f.user1 === nickname);
       return {
         nickname: isUser1 ? f.user2 : f.user1,
-        userId: isUser1 ? (f.user2_id || '') : (f.user1_id || ''),
-        avatar: isUser1 ? f.user2_avatar : f.user1_avatar,
-        level: isUser1 ? f.user2_level : f.user1_level,
-        title: isUser1 ? f.user2_title : f.user1_title,
-        exp: isUser1 ? f.user2_exp : f.user1_exp,
-        friendSince: f.created_at
+        userId: isUser1 ? (f.user2Id || '') : (f.user1Id || ''),
+        avatar: isUser1 ? f.user2Avatar : f.user1Avatar,
+        level: isUser1 ? f.user2Level : f.user1Level,
+        title: isUser1 ? f.user2Title : f.user1Title,
+        exp: isUser1 ? f.user2Exp : f.user1Exp,
+        friendSince: f.createdAt
       };
     });
 
@@ -496,46 +459,31 @@ app.get('/api/friends', async (req, res) => {
 });
 
 // 删除好友
-app.delete('/api/friends', async (req, res) => {
+app.delete('/api/friends', (req, res) => {
   const { nickname, friendNickname, userId } = req.body;
   if ((!nickname && !userId) || !friendNickname) return res.status(400).json({ error: '参数不完整' });
 
   try {
-    // 查找并删除好友关系
-    const { data: friendsData, error: fetchError } = await supabase
-      .from('friends')
-      .select('*');
-    
-    if (fetchError) throw fetchError;
+    const data = loadData();
+    const before = data.friends.length;
 
-    let deleted = false;
-    for (const f of (friendsData || [])) {
-      let shouldDelete = false;
-        
-      if (userId && f.user1_id && f.user2_id) {
-        const mySide = f.user1_id === userId ? 'user1' : (f.user2_id === userId ? 'user2' : '');
-        if (mySide) {
-          const otherNickname = mySide === 'user1' ? f.user2 : f.user1;
-          shouldDelete = otherNickname === friendNickname;
-        }
+    data.friends = data.friends.filter(f => {
+      if (userId) {
+        const mySide = f.user1Id === userId ? 'user1' : (f.user2Id === userId ? 'user2' : '');
+        if (!mySide) return true;
+        const otherNickname = mySide === 'user1' ? f.user2 : f.user1;
+        return otherNickname !== friendNickname;
       } else {
-        shouldDelete = (f.user1 === nickname && f.user2 === friendNickname) ||
-                      (f.user1 === friendNickname && f.user2 === nickname);
+        return !((f.user1 === nickname && f.user2 === friendNickname) ||
+                 (f.user1 === friendNickname && f.user2 === nickname));
       }
+    });
 
-      if (shouldDelete) {
-        const { error: deleteError } = await supabase
-          .from('friends')
-          .delete()
-          .eq('id', f.id);
-          
-        if (deleteError) throw deleteError;
-        deleted = true;
-      }
+    if (data.friends.length === before) {
+      return res.status(404).json({ error: '好友关系不存在' });
     }
 
-    if (!deleted) return res.status(404).json({ error: '好友关系不存在' });
-
+    saveData(data);
     res.json({ success: true, message: '好友已删除' });
   } catch (err) {
     console.error('Delete friend error:', err);
@@ -545,69 +493,17 @@ app.delete('/api/friends', async (req, res) => {
 
 // ========== PK 功能 ==========
 
-function getPkComment(myLevel, friendLevel, iWin) {
-  const diff = Math.abs(myLevel - friendLevel);
-  
-  if (diff === 0) {
-    // 旗鼓相当
-    const comments = [
-      '旗鼓相当！下次再战！⚔️',
-      '高手过招，精彩！👏',
-      '不分伯仲，友谊第一！🤝'
-    ];
-    return comments[Math.floor(Math.random() * comments.length)];
-  }
-
-  const isBig = diff >= 5;
-  
-  if (iWin) {
-    if (isBig) {
-      const winComments = [
-        `以弱胜强！${friendLevel}级的对手输给了${myLevel}级的我！🎉`,
-        '逆风翻盘！太燃了！🔥',
-        '不愧是我！弱者也能胜利！💪'
-      ];
-      return winComments[Math.floor(Math.random() * winComments.length)];
-    } else {
-      const winComments = [
-        '轻松取胜！💪',
-        '实力获胜！👍',
-        '赢得漂亮！✨'
-      ];
-      return winComments[Math.floor(Math.random() * winComments.length)];
-    }
-  } else {
-    if (isBig) {
-      const loseComments = [
-        `输给${friendLevel}级的对手，差距太大了...😭`,
-        '级别差距太大，认了...📉',
-        '强者面前，我还需努力💦'
-      ];
-      return loseComments[Math.floor(Math.random() * loseComments.length)];
-    } else {
-      const loseComments = [
-        '可惜了，下次一定赢！💪',
-        '运气不好，再来！🎲',
-        '不服，再战！⚔️'
-      ];
-      return loseComments[Math.floor(Math.random() * loseComments.length)];
-    }
-  }
-}
-
-app.post('/api/friends/pk', async (req, res) => {
+app.post('/api/friends/pk', (req, res) => {
   const { myNickname, myLevel, myTitle, myExp, myAvatar,
           friendNickname, friendLevel, friendTitle, friendExp, friendAvatar } = req.body;
 
   if (!myNickname || !friendNickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
+    const data = loadData();
+
     // 检查是否好友
-    const { data: friendsData } = await supabase
-      .from('friends')
-      .select('*');
-    
-    const isFriend = friendsData && friendsData.some(f =>
+    const isFriend = data.friends.some(f =>
       (f.user1 === myNickname && f.user2 === friendNickname) ||
       (f.user1 === friendNickname && f.user2 === myNickname)
     );
@@ -634,16 +530,18 @@ app.post('/api/friends/pk', async (req, res) => {
     }
 
     // 保存 PK 记录
-    await supabase
-      .from('pk_records')
-      .insert([{
-        challenger: myNickname,
-        challenger_level: myLevel,
-        defender: friendNickname,
-        defender_level: friendLevel,
-        result: result,
-        comment: comment
-      }]);
+    data.pkRecords.push({
+      id: Date.now(),
+      challenger: myNickname,
+      challengerLevel: myLevel,
+      defender: friendNickname,
+      defenderLevel: friendLevel,
+      result: result,
+      comment: comment,
+      createdAt: new Date().toISOString()
+    });
+
+    saveData(data);
 
     res.json({
       success: true,
@@ -663,36 +561,71 @@ app.post('/api/friends/pk', async (req, res) => {
 });
 
 // 获取 PK 记录
-app.get('/api/friends/pk/history', async (req, res) => {
+app.get('/api/friends/pk/history', (req, res) => {
   const { nickname } = req.query;
   if (!nickname) return res.status(400).json({ error: '昵称不能为空' });
 
   try {
-    const { data, error } = await supabase
-      .from('pk_records')
-      .select('*')
-      .or(`challenger.eq.${nickname},defender.eq.${nickname}`)
-      .order('created_at', { ascending: false })
-      .limit(20);
+    const data = loadData();
+    const records = data.pkRecords.filter(r => 
+      r.challenger === nickname || r.defender === nickname
+    ).slice(-20).reverse();
     
-    if (error) throw error;
-
-    res.json({ records: data || [] });
+    res.json({ records });
   } catch (err) {
     console.error('PK history error:', err);
     res.status(500).json({ error: '服务器错误' });
   }
 });
 
-// 时间格式化函数
-function formatTime(dateString) {
-  const date = new Date(dateString);
-  const diff = new Date() - date;
-  if (diff < 60000) return '刚刚';
-  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
-  if (diff < 604800000) return Math.floor(diff / 86400000) + '天前';
-  return (date.getMonth() + 1) + '/' + date.getDate();
+// PK 评语生成函数
+function getPkComment(myLevel, friendLevel, iWin) {
+  const diff = Math.abs(myLevel - friendLevel);
+  
+  if (diff === 0) {
+    const comments = [
+      '旗鼓相当！下次再战！⚔️',
+      '高手过招，精彩！👏',
+      '不分伯仲，友谊第一！🤝'
+    ];
+    return comments[Math.floor(Math.random() * comments.length)];
+  }
+
+  const isBig = diff >= 5;
+  
+  if (iWin) {
+    if (isBig) {
+      const winComments = [
+        `以弱胜强！${friendLevel}级的${friendNickname}输给了${myLevel}级的我！🎉`,
+        '逆风翻盘！太燃了！🔥',
+        '不愧是我！弱者也能胜利！💪'
+      ];
+      return winComments[Math.floor(Math.random() * winComments.length)];
+    } else {
+      const winComments = [
+        '轻松取胜！💪',
+        '实力获胜！👍',
+        '赢得漂亮！✨'
+      ];
+      return winComments[Math.floor(Math.random() * winComments.length)];
+    }
+  } else {
+    if (isBig) {
+      const loseComments = [
+        `输给${friendLevel}级的${friendNickname}，差距太大了...😭`,
+        '级别差距太大，认了...📉',
+        '强者面前，我还需努力💦'
+      ];
+      return loseComments[Math.floor(Math.random() * loseComments.length)];
+    } else {
+      const loseComments = [
+        '可惜了，下次一定赢！💪',
+        '运气不好，再来！🎲',
+        '不服，再战！⚔️'
+      ];
+      return loseComments[Math.floor(Math.random() * loseComments.length)];
+    }
+  }
 }
 
 app.listen(PORT, '0.0.0.0', () => {
