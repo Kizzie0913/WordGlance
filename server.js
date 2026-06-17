@@ -127,7 +127,7 @@ async function saveDataToGitHub(data, sha = null) {
 let dataCache = null;
 let dataSha = null;
 let lastLoadTime = 0;
-const CACHE_TTL = 3000;
+const CACHE_TTL = 0; // 每次都从GitHub读取最新数据，确保同步
 
 async function loadData() {
   const now = Date.now();
