@@ -258,6 +258,22 @@
       "user2Title": "Slang Goblin",
       "user2Exp": 215,
       "createdAt": "2026-06-17T10:30:04.859Z"
+    },
+    {
+      "id": 1781693661562,
+      "user1Id": "u_1781693494448_1wzo47",
+      "user1": "温康",
+      "user1Avatar": "🐲",
+      "user1Level": 1,
+      "user1Title": "Noobslayer",
+      "user1Exp": 0,
+      "user2Id": "u_1781631383256_tff92l",
+      "user2": "Kizzie",
+      "user2Avatar": "🍜",
+      "user2Level": 5,
+      "user2Title": "Slang Goblin",
+      "user2Exp": 215,
+      "createdAt": "2026-06-17T10:54:21.562Z"
     }
   ],
   "friendRequests": [
@@ -366,7 +382,7 @@
       "senderTitle": "Noobslayer",
       "senderExp": 0,
       "recver": "Kizzie",
-      "status": "pending",
+      "status": "accepted",
       "createdAt": "2026-06-17T10:53:22.079Z"
     }
   ],
