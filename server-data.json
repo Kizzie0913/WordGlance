@@ -197,7 +197,17 @@
       "likes": 0,
       "likedUsers": [],
       "createdAt": "2026-06-17T09:58:34.623Z",
-      "replies": []
+      "replies": [
+        {
+          "id": 1781871530737,
+          "userId": "u_1781672085220_uefx19",
+          "nickname": "1",
+          "avatar": "👽",
+          "content": "私信功能",
+          "mentionUsers": [],
+          "createdAt": "2026-06-19T12:18:50.737Z"
+        }
+      ]
     }
   ],
   "friends": [
