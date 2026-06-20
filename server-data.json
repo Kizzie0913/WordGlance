@@ -139,7 +139,9 @@
       "title": "Noobslayer",
       "exp": 0,
       "createdAt": "2026-06-20T07:45:00.018Z",
-      "lastLogin": "2026-06-20T07:45:00.018Z"
+      "lastLogin": "2026-06-20T07:45:00.018Z",
+      "vocabulary": [],
+      "corpus": []
     }
   ],
   "messages": [
